@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1016">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="LiqueDT">
+  <meta name="description" content="LiqueDT is a live NASDAQ market context companion for sessions, related markets, economic events and news.">
+  <title>LiqueDT — NASDAQ market context</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="favicon-32.png?v=1.0.0" type="image/png" sizes="32x32">
+  <link rel="shortcut icon" href="favicon.ico?v=1.0.0" type="image/x-icon">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1.0.0">
+  <link rel="stylesheet" href="styles.css?v=1.0.0">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to market overview</a>
+
+  <header class="app-header">
+    <a class="brand" href="#overview" aria-label="LiqueDT home">
+      <img src="icon.svg?v=1.0.0" alt="" width="40" height="40">
+      <span><strong>LiqueDT<span>.</span></strong><small>NASDAQ CONTEXT</small></span>
+    </a>
+
+    <nav class="desktop-nav primary-nav" aria-label="Primary navigation">
+      <a class="active" href="#overview">Overview</a>
+      <a href="#markets">Markets</a>
+      <a href="#calendar">Calendar</a>
+      <a href="#news">News</a>
+    </nav>
+
+    <div class="market-header" aria-live="polite">
+      <div class="market-header-status">
+        <span id="marketDot" class="market-dot"></span>
+        <span><strong id="marketState">Checking market</strong><small id="marketStateDetail">Indicative OTC hours</small></span>
+      </div>
+      <div class="header-countdown"><strong id="marketCountdown">--:--:--</strong><small id="marketCountdownLabel">Next change</small></div>
+      <div class="sg-clock"><strong id="sgTime">--:--:--</strong><small id="sgDate">Singapore</small></div>
+    </div>
+  </header>
+
+  <div class="ticker-shell" aria-label="Live market ticker">
+    <div id="tickerTrack" class="ticker-track">
+      <div id="tickerWidget" class="ticker-widget"></div>
+      <div id="tickerWidgetClone" class="ticker-widget" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <section class="data-health" aria-label="Live data status" aria-live="polite">
+    <div class="health-summary">
+      <span id="dataHealthDot" class="health-dot checking"></span>
+      <span><strong id="dataHealthSummary">Checking live data</strong><small id="dataFreshness">Connecting sources…</small></span>
+    </div>
+    <div class="health-item"><span>Markets</span><strong id="marketHealth" class="checking">Checking</strong></div>
+    <div class="health-item"><span>Charts</span><strong id="chartsHealth" class="checking">Checking</strong></div>
+    <div class="health-item"><span>News</span><strong id="newsHealth" class="checking">Checking</strong></div>
+    <div class="health-item"><span>Calendar</span><strong id="calendarHealth" class="checking">Checking</strong></div>
+    <div class="health-item last-check"><span>Last checked</span><strong id="lastChecked">—</strong></div>
+    <button id="refreshData" class="quiet-button" type="button" aria-label="Refresh all market data">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5M4 13a8.1 8.1 0 0 0 15.5 2m.5 5v-5h-5"/></svg>
+      Refresh
+    </button>
+  </section>
+
+  <nav class="mobile-nav primary-nav" aria-label="Mobile navigation">
+    <a class="active" href="#overview">Overview</a>
+    <a href="#markets">Markets</a>
+    <a href="#calendar">Calendar</a>
+    <a href="#news">News</a>
+  </nav>
+
+  <main id="main">
+    <section id="overview" class="hero section-anchor">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="live-pip"></span> NASDAQ COMPANION</p>
+        <h1>Market overview</h1>
+        <p class="hero-lede">Sessions, related markets, economic events and headlines—aligned to Singapore time.</p>
+        <div class="overview-tags"><span>NO EXECUTION</span><span>CONTEXT ONLY</span><span>SGT</span></div>
+      </div>
+
+      <div class="overview-intelligence">
+      <article class="pulse-card total-pulse" aria-labelledby="totalPulseTitle">
+        <div class="pulse-topline">
+          <p class="eyebrow">TOTAL NASDAQ CONTEXT</p>
+          <span id="totalPulseStatus" class="source-status waiting">CONNECTING</span>
+        </div>
+        <div class="pulse-gauge" aria-hidden="true"><span id="totalPulseNeedle"></span></div>
+        <div class="pulse-labels"><span>Bearish</span><span>Balanced</span><span>Bullish</span></div>
+        <h2 id="totalPulseTitle">Building the live market picture</h2>
+        <p id="totalPulseSummary">Combining Nasdaq movement, rates, volatility, semiconductors, headlines and upcoming USD event risk.</p>
+        <div class="pulse-factors" id="totalPulseFactors"><span>Markets</span><span>News</span><span>Calendar</span></div>
+        <p class="micro-disclaimer">Live context only · never a trading signal</p>
+      </article>
+
+      <div class="source-pulse-grid">
+      <article class="pulse-card compact-pulse" aria-labelledby="marketPulseTitle">
+        <div class="pulse-topline">
+          <p class="eyebrow">MARKETS AROUND NASDAQ</p>
+          <span id="marketPulseStatus" class="source-status waiting">CONNECTING</span>
+        </div>
+        <div class="pulse-gauge" aria-hidden="true"><span id="marketPulseNeedle"></span></div>
+        <div class="pulse-labels"><span>Bearish</span><span>Balanced</span><span>Bullish</span></div>
+        <h2 id="marketPulseTitle">Waiting for cross-market data</h2>
+        <p id="marketPulseSummary">Nasdaq momentum, S&P 500 breadth, U.S. yields, VIX and semiconductors are weighted by their relationship with the index.</p>
+      </article>
+
+      <article class="pulse-card compact-pulse" aria-labelledby="pulseTitle">
+        <div class="pulse-topline">
+          <p class="eyebrow">NEWS NARRATIVE</p>
+          <span id="pulseStatus" class="source-status waiting">CONNECTING</span>
+        </div>
+        <div class="pulse-gauge" aria-hidden="true"><span id="pulseNeedle"></span></div>
+        <div class="pulse-labels"><span>Bearish</span><span>Balanced</span><span>Bullish</span></div>
+        <h2 id="pulseTitle">Waiting for live headlines</h2>
+        <p id="pulseSummary">LiqueDT scores Nasdaq-sensitive language across recent headlines. It describes the current narrative; it does not predict the next candle.</p>
+        <div class="pulse-factors" id="pulseFactors">
+          <span>Rates</span><span>Semis</span><span>Risk</span>
+        </div>
+        <p class="micro-disclaimer">Experimental context only · never a trading signal</p>
+      </article>
+      </div>
+      </div>
+    </section>
+
+    <section class="session-section" aria-labelledby="sessionsTitle">
+      <div class="section-heading compact">
+        <div><p class="eyebrow">MARKET WINDOWS · SGT</p><h2 id="sessionsTitle">Where liquidity is awake</h2></div>
+        <p>Session times follow regional daylight saving automatically.</p>
+      </div>
+      <div id="sessionGrid" class="session-grid">
+        <article class="session-card" data-session="asia">
+          <div class="session-number">01</div>
+          <div><span class="session-status">CHECKING</span><h3>Asia</h3><p>08:00–16:00 SGT</p></div>
+          <div class="session-timer"><strong>--:--:--</strong><small>Next change</small></div>
+        </article>
+        <article class="session-card" data-session="london">
+          <div class="session-number">02</div>
+          <div><span class="session-status">CHECKING</span><h3>London</h3><p class="session-local-time">Local market hours</p></div>
+          <div class="session-timer"><strong>--:--:--</strong><small>Next change</small></div>
+        </article>
+        <article class="session-card" data-session="new-york">
+          <div class="session-number">03</div>
+          <div><span class="session-status">CHECKING</span><h3>New York</h3><p class="session-local-time">Local market hours</p></div>
+          <div class="session-timer"><strong>--:--:--</strong><small>Next change</small></div>
+        </article>
+      </div>
+    </section>
+
+    <section id="markets" class="market-section section-anchor" aria-labelledby="marketsTitle">
+      <div class="section-heading">
+        <div><p class="eyebrow">CROSS-MARKET LENS</p><h2 id="marketsTitle">The markets around NASDAQ</h2></div>
+        <p>Tap a driver to bring its chart into focus. Nasdaq effect uses rolling correlation when available; weak regimes are muted.</p>
+      </div>
+
+      <div class="market-layout">
+        <article class="chart-card">
+          <div class="chart-toolbar">
+            <div>
+              <span id="activeMarketTag">U.S. TECH INDEX</span>
+              <h3 id="activeMarketName">Nasdaq 100</h3>
+            </div>
+            <div id="marketTabs" class="market-tabs" role="tablist" aria-label="Chart symbol">
+              <button class="active" type="button" role="tab" aria-selected="true" data-symbol="NASDAQ:NDX" data-name="Nasdaq 100" data-tag="U.S. TECH INDEX">NDX</button>
+              <button type="button" role="tab" aria-selected="false" data-symbol="SP:SPX" data-name="S&amp;P 500" data-tag="BROAD U.S. RISK">SPX</button>
+              <button type="button" role="tab" aria-selected="false" data-symbol="OANDA:USB10YUSD" data-name="U.S. 10Y Bond Yield" data-tag="RATES ? OANDA">US10Y</button>
+              <button type="button" role="tab" aria-selected="false" data-symbol="TVC:VIX" data-name="CBOE Volatility Index" data-tag="VOLATILITY">VIX</button>
+              <button type="button" role="tab" aria-selected="false" data-symbol="NASDAQ:SOXX" data-name="Semiconductor ETF" data-tag="CHIP / AI LENS">SOXX</button>
+            </div>
+          </div>
+          <div id="marketChart" class="market-chart tradingview-widget-container" aria-label="Interactive market chart"></div>
+          <div class="widget-credit">Live chart by <a href="https://www.tradingview.com/" target="_blank" rel="noreferrer">TradingView</a></div>
+        </article>
+
+        <aside class="driver-stack" aria-label="Nasdaq market drivers">
+          <article class="driver-card" data-driver="NDX">
+            <div><span class="driver-icon">NQ</span><span class="relationship">Primary index</span></div>
+            <h3>Nasdaq 100</h3>
+            <p>The reference market. Intraday index momentum anchors the combined NASDAQ context.</p>
+            <button type="button" data-open-symbol="NASDAQ:NDX">Open NDX chart <span>&#8599;</span></button>
+          </article>
+          <article class="driver-card" data-driver="SPX">
+            <div><span class="driver-icon">SP</span><span class="relationship">Broad risk tape</span></div>
+            <h3>S&P 500</h3>
+            <p>Broad U.S. equity breadth helps confirm whether Nasdaq movement is isolated tech flow or wider risk appetite.</p>
+            <button type="button" data-open-symbol="SP:SPX">Open SPX chart <span>&#8599;</span></button>
+          </article>
+          <article class="driver-card" data-driver="US10Y">
+            <div><span class="driver-icon">%</span><span class="relationship">Usually inverse</span></div>
+            <h3>Rates & yields</h3>
+            <p>Higher yields can pressure long-duration growth stocks; falling yields can relieve valuation pressure.</p>
+            <button type="button" data-open-symbol="OANDA:USB10YUSD">Open US10Y chart <span>&#8599;</span></button>
+          </article>
+          <article class="driver-card" data-driver="VIX">
+            <div><span class="driver-icon">V</span><span class="relationship">Volatility lens</span></div>
+            <h3>VIX</h3>
+            <p>Rising volatility often signals risk-off pressure; falling volatility can support equity risk appetite.</p>
+            <button type="button" data-open-symbol="TVC:VIX">Open VIX chart <span>&#8599;</span></button>
+          </article>
+          <article class="driver-card" data-driver="SOXX">
+            <div><span class="driver-icon">AI</span><span class="relationship">Chip / AI lens</span></div>
+            <h3>Semiconductors</h3>
+            <p>Chip and AI leadership often drives Nasdaq concentration. Weak semis can drag even when the wider tape is stable.</p>
+            <button type="button" data-open-symbol="NASDAQ:SOXX">Open SOXX chart <span>&#8599;</span></button>
+          </article>
+        </aside>
+      </div>
+    </section>
+
+    <section id="calendar" class="intel-grid calendar-section section-anchor" aria-label="Economic calendar">
+      <article class="intel-panel calendar-panel">
+        <div class="panel-heading">
+          <div><p class="eyebrow">LIVE INTELLIGENCE · SGT</p><h2>Economic calendar</h2></div>
+          <span id="calendarStatus" class="source-status waiting">CONNECTING</span>
+        </div>
+        <div id="calendarList" class="calendar-list" aria-live="polite">
+          <div class="loading-row"><span></span><p>Looking for upcoming USD events…</p></div>
+        </div>
+        <div class="panel-footer"><span id="calendarFreshnessNote">Filter: USD · high &amp; medium impact</span><a href="https://www.forexfactory.com/calendar" target="_blank" rel="noreferrer">Full calendar ↗</a></div>
+      </article>
+    </section>
+
+    <section id="news" class="news-section section-anchor" aria-label="Market news">
+      <article class="intel-panel news-panel">
+        <div class="panel-heading">
+          <div><p class="eyebrow">LIVE INTELLIGENCE · SGT</p><h2>Market news</h2></div>
+          <span id="newsStatus" class="source-status waiting">CONNECTING</span>
+        </div>
+        <div id="newsList" class="news-list" aria-live="polite">
+          <div class="loading-row"><span></span><p>Scanning Nasdaq-sensitive headlines…</p></div>
+        </div>
+        <div class="panel-footer"><span id="newsFreshnessNote">Estimated from headlines · source attribution shown per story</span><a href="https://news.google.com/search?q=Nasdaq%20100%20OR%20NDX%20OR%20QQQ%20technology%20stocks" target="_blank" rel="noreferrer">More Nasdaq news ↗</a></div>
+      </article>
+    </section>
+
+    <section class="principle-strip" aria-label="LiqueDT product principles">
+      <p>Built for <strong>awareness</strong>, not execution.</p>
+      <span></span>
+      <p>No order entry. No signals. No promises.</p>
+      <button id="methodButton" class="quiet-button" type="button">How the narrative works</button>
+      <button id="feedbackButton" class="quiet-button" type="button">Feedback / report an issue</button>
+    </section>
+  </main>
+
+  <footer>
+    <a class="brand footer-brand" href="#overview"><img src="icon.svg?v=1.0.0" alt="" width="32" height="32"><strong>LiqueDT<span>.</span></strong></a>
+    <p>Liquidity context for NASDAQ · Singapore time everywhere</p>
+    <p>Market hours are indicative and can vary by broker and holiday.</p>
+  </footer>
+
+  <dialog id="methodDialog">
+    <form method="dialog">
+      <button class="dialog-close" aria-label="Close">×</button>
+      <p class="eyebrow">METHODOLOGY</p>
+      <h2>A narrative compass, not a forecast.</h2>
+      <p>LiqueDT scans recent Nasdaq-sensitive headlines for language around rates, AI/semiconductors, mega-cap earnings, volatility and risk. It assigns a small estimated directional weight, reason and confidence, then aggregates the result into bearish, balanced or bullish narrative context.</p>
+      <p>News impact is a headline estimate, not full-article verification. Cross-market effects use rolling correlation when available, but relationships can invert and price may already reflect the story. Always read the underlying source. This feature must never be used as a standalone reason to trade.</p>
+      <button class="primary-button" value="close">Understood</button>
+    </form>
+  </dialog>
+
+  <dialog id="feedbackDialog">
+    <form id="feedbackForm" action="https://formsubmit.co/LiqueDT@gmail.com" method="POST">
+      <button class="dialog-close" type="button" data-close-dialog="feedbackDialog" aria-label="Close">×</button>
+      <p class="eyebrow">CONTACT LIQUEDT</p>
+      <h2>Review, suggestion or report.</h2>
+      <label class="form-field">Category
+        <select id="feedbackCategory" name="Category"><option>Suggestion</option><option>Bug report</option><option>Data issue</option><option>Review</option><option>Other</option></select>
+      </label>
+      <label class="form-field">Message
+        <textarea id="feedbackMessage" name="Message" required maxlength="1500" rows="6" placeholder="Tell us what happened or what you would improve."></textarea>
+      </label>
+      <input type="hidden" name="_subject" value="New LiqueDT NASDAQ feedback">
+      <input type="hidden" name="_template" value="table">
+      <input type="hidden" name="_captcha" value="false">
+      <p class="form-note">Sends directly to LiqueDT@gmail.com through FormSubmit. Visitors do not need an email login. The inbox owner must approve FormSubmit once before the first message is delivered.</p>
+      <button class="primary-button" type="submit">Send feedback</button>
+    </form>
+  </dialog>
+
+  <noscript><div class="noscript">LiqueDT needs JavaScript for live clocks, data and charts.</div></noscript>
+  <script src="app.js?v=1.0.0" defer></script>
+</body>
+</html>

@@ -51,7 +51,7 @@ def load_market_yfinance() -> dict:
             if not previous:
                 continue
             change_percent = (price - previous) / previous * 100
-            normalized_move = max(-1.0, min(1.0, change_percent / 0.75))
+            normalized_move = max(-1.0, min(1.0, change_percent / float(series["move_scale"])))
             if series["id"] == "NDX":
                 corr_20, corr_60 = 1.0, 1.0
             else:
@@ -194,6 +194,7 @@ def main() -> None:
         "market": snapshot("market", load_market_resilient, read_previous(output, "market")),
         "news": snapshot("news", server.load_news, read_previous(output, "news")),
         "calendar": snapshot("calendar", server.load_calendar, read_previous(output, "calendar")),
+        "companies": snapshot("companies", server.load_companies, read_previous(output, "companies")),
     }
     for name, payload in feeds.items():
         (output / f"{name}.json").write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")

@@ -6,34 +6,42 @@ const SINGAPORE_TZ = "Asia/Singapore";
 const formatterCache = new Map();
 
 const sessions = [
-  { id: "asia", timeZone: "Asia/Singapore", openHour: 8, closeHour: 16 },
-  { id: "london", timeZone: "Europe/London", openHour: 8, closeHour: 17 },
-  { id: "new-york", timeZone: "America/New_York", openHour: 8, closeHour: 17 }
+  { id: "asia", label: "Asia / overnight", note: "Futures and overnight sentiment; usually slower for US100.cash", anchorTimeZone: "Asia/Singapore", open: { timeZone: "Asia/Singapore", hour: 8, minute: 0 }, close: { timeZone: "Asia/Singapore", hour: 16, minute: 0 } },
+  { id: "london", label: "Europe pre-market", note: "Europe flow before Nasdaq cash open; direction can start building", anchorTimeZone: "America/New_York", requiresCashDay: true, open: { timeZone: "Europe/London", hour: 8, minute: 0 }, close: { timeZone: "America/New_York", hour: 9, minute: 30 } },
+  { id: "new-york", label: "U.S. cash session", note: "Main US100 liquidity window; first 15-30 min can fake out", anchorTimeZone: "America/New_York", requiresCashDay: true, cashSession: true, open: { timeZone: "America/New_York", hour: 9, minute: 30 }, close: { cashClose: true } }
 ];
 
+const nasdaqClosedDates = new Set(["2026-01-01", "2026-01-19", "2026-02-16", "2026-04-03", "2026-05-25", "2026-06-19", "2026-07-03", "2026-09-07", "2026-11-26", "2026-12-25"]);
+const nasdaqEarlyCloses = new Map([["2026-11-27", { hour: 13, minute: 0 }], ["2026-12-24", { hour: 13, minute: 0 }]]);
+
 const widgetSymbols = {
-  "NASDAQ:NDX": { name: "Nasdaq 100", tag: "U.S. TECH INDEX" },
-  "SP:SPX": { name: "S&P 500", tag: "BROAD U.S. RISK" },
-  "OANDA:USB10YUSD": { name: "U.S. 10Y Bond Yield", tag: "RATES ? OANDA" },
-  "TVC:VIX": { name: "CBOE Volatility Index", tag: "VOLATILITY" },
-  "NASDAQ:SOXX": { name: "Semiconductor ETF", tag: "CHIP / AI LENS" }
+  "CAPITALCOM:US100": { name: "US100 / Nasdaq 100 Cash CFD", tag: "PRIMARY US100 CASH CFD" },
+  "CAPITALCOM:US500": { name: "US500 / S&P 500 Cash CFD", tag: "US500 / BROAD RISK CONFIRMATION" },
+  "CAPITALCOM:US30": { name: "US30 / Dow Cash CFD", tag: "US30 / BROADER SENTIMENT" },
+  "TVC:US10Y": { name: "U.S. 10Y Treasury Yield", tag: "DURATION / RATES" },
+  "CBOE:VXN": { name: "Nasdaq-100 Volatility Index", tag: "NASDAQ-SPECIFIC FEAR" },
+  "NASDAQ:SOX": { name: "PHLX Semiconductor Index", tag: "CHIP / AI LEADERSHIP" },
+  "TVC:DXY": { name: "U.S. Dollar Index", tag: "GLOBAL FX CONDITIONS" }
 };
 
 const tickerDefinitions = [
-  { id: "NDX", label: "Nasdaq 100", fallback: "NDX" },
-  { id: "SPX", label: "S&P 500", fallback: "SPX" },
+  { id: "NDX", label: "US100 / NDX", fallback: "US100" },
+  { id: "SPX", label: "US500", fallback: "SPX" },
+  { id: "DJI", label: "US30", fallback: "US30" },
   { id: "US10Y", label: "U.S. 10Y", fallback: "US10Y" },
-  { id: "VIX", label: "VIX", fallback: "VIX" },
-  { id: "SOXX", label: "Semis", fallback: "SOXX" }
+  { id: "VXN", label: "VXN", fallback: "VXN" },
+  { id: "SOX", label: "Semis", fallback: "SOX" },
+  { id: "DXY", label: "Dollar", fallback: "DXY" }
 ];
 
-let activeSymbol = "NASDAQ:NDX";
+let activeSymbol = "CAPITALCOM:US100";
 let latestRefresh = null;
 let latestMarketPulse = null;
 let latestMarketItems = [];
 let tickerResizeTimer = null;
 let latestNewsPulse = null;
 let latestCalendar = null;
+let latestCalendarPulse = null;
 let latestStaticBuild = null;
 const WIDGETS_DISABLED = new URLSearchParams(location.search).has("no-widgets");
 const healthState = { market: "checking", charts: "checking", news: "checking", calendar: "checking" };
@@ -41,7 +49,7 @@ const healthMeta = { market: null, charts: null, news: null, calendar: null };
 const healthLabels = { market: "Markets", charts: "Charts", news: "News", calendar: "Calendar" };
 
 function escapeHtml(value) {
-  return String(value ?? "")
+  return String(value - "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
@@ -97,37 +105,50 @@ function countdown(milliseconds) {
   return days ? `${days}d ${clock}` : clock;
 }
 
-function sessionState(now, config) {
-  const parts = zonedParts(now, config.timeZone);
+function ymd(parts) {
+  return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
+}
+
+function isNasdaqCashDay(parts) {
   const weekday = calendarDate(parts).weekday;
-  const minuteOfDay = parts.hour * 60 + parts.minute;
-  const opens = config.openHour * 60;
-  const closes = config.closeHour * 60;
-  const isWeekday = weekday >= 1 && weekday <= 5;
-  const open = isWeekday && minuteOfDay >= opens && minuteOfDay < closes;
-  let target;
+  return weekday >= 1 && weekday <= 5 && !nasdaqClosedDates.has(ymd(parts));
+}
 
-  if (open) {
-    target = zonedDateTimeToUtc(parts.year, parts.month, parts.day, config.closeHour, 0, config.timeZone);
-  } else {
-    let offset = isWeekday && minuteOfDay < opens ? 0 : 1;
-    while (true) {
-      const candidate = calendarDate(parts, offset);
-      if (candidate.weekday >= 1 && candidate.weekday <= 5) {
-        target = zonedDateTimeToUtc(candidate.year, candidate.month, candidate.day, config.openHour, 0, config.timeZone);
-        break;
-      }
-      offset += 1;
-    }
+function nasdaqCashCloseFor(parts) {
+  return nasdaqEarlyCloses.get(ymd(parts)) || { hour: 16, minute: 0 };
+}
+
+function sessionEndpointTime(config, side, candidate) {
+  const endpoint = side === "close" && config.close.cashClose ? nasdaqCashCloseFor(candidate) : config[side];
+  return zonedDateTimeToUtc(candidate.year, candidate.month, candidate.day, endpoint.hour, endpoint.minute || 0, endpoint.timeZone || "America/New_York");
+}
+
+function sessionWindow(now, config, offset) {
+  const anchorParts = zonedParts(now, config.anchorTimeZone || config.open.timeZone);
+  const candidate = calendarDate(anchorParts, offset);
+  const openTime = sessionEndpointTime(config, "open", candidate);
+  let closeTime = sessionEndpointTime(config, "close", candidate);
+  if (closeTime <= openTime) {
+    const nextDay = calendarDate(candidate, 1);
+    closeTime = sessionEndpointTime(config, "close", nextDay);
   }
+  return { candidate, openTime, closeTime };
+}
 
-  const displayParts = zonedParts(open ? now : target, config.timeZone);
-  const openSg = formatter(SINGAPORE_TZ, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
-    .format(zonedDateTimeToUtc(displayParts.year, displayParts.month, displayParts.day, config.openHour, 0, config.timeZone));
-  const closeSg = formatter(SINGAPORE_TZ, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
-    .format(zonedDateTimeToUtc(displayParts.year, displayParts.month, displayParts.day, config.closeHour, 0, config.timeZone));
-
-  return { open, target, openSg, closeSg };
+function sessionState(now, config) {
+  let nextWindow = null;
+  for (let offset = -1; offset <= 8; offset += 1) {
+    const window = sessionWindow(now, config, offset);
+    const weekday = window.candidate.weekday;
+    const validDay = config.requiresCashDay ? isNasdaqCashDay(window.candidate) : weekday >= 1 && weekday <= 5;
+    if (!validDay) continue;
+    if (now >= window.openTime && now < window.closeTime) {
+      return { open: true, target: window.closeTime, openSg: formatter(SINGAPORE_TZ, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(window.openTime), closeSg: formatter(SINGAPORE_TZ, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(window.closeTime) };
+    }
+    if (window.openTime > now && (!nextWindow || window.openTime < nextWindow.openTime)) nextWindow = window;
+  }
+  if (!nextWindow) nextWindow = sessionWindow(now, config, 1);
+  return { open: false, target: nextWindow.openTime, openSg: formatter(SINGAPORE_TZ, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(nextWindow.openTime), closeSg: formatter(SINGAPORE_TZ, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(nextWindow.closeTime) };
 }
 
 function nextSundayAt(parts, hour, timeZone) {
@@ -139,14 +160,12 @@ function nextSundayAt(parts, hour, timeZone) {
 }
 
 function nextNasdaqCashOpen(parts) {
+  const openMinute = 9 * 60 + 30;
+  const currentMinute = parts.hour * 60 + parts.minute;
   let offset = 0;
   while (true) {
     const candidate = calendarDate(parts, offset);
-    const sameDay = offset === 0;
-    const beforeOpen = parts.hour < 9 || (parts.hour === 9 && parts.minute < 30);
-    if (candidate.weekday >= 1 && candidate.weekday <= 5 && (!sameDay || beforeOpen)) {
-      return zonedDateTimeToUtc(candidate.year, candidate.month, candidate.day, 9, 30, "America/New_York");
-    }
+    if (isNasdaqCashDay(candidate) && (offset !== 0 || currentMinute < openMinute)) return zonedDateTimeToUtc(candidate.year, candidate.month, candidate.day, 9, 30, "America/New_York");
     offset += 1;
   }
 }
@@ -157,23 +176,12 @@ function nasdaqMarketState(now) {
   const date = calendarDate(parts);
   const minute = parts.hour * 60 + parts.minute;
   const openMinute = 9 * 60 + 30;
-  const closeMinute = 16 * 60;
-  const isWeekday = date.weekday >= 1 && date.weekday <= 5;
-  const open = isWeekday && minute >= openMinute && minute < closeMinute;
-  if (open) {
-    return {
-      open,
-      target: zonedDateTimeToUtc(parts.year, parts.month, parts.day, 16, 0, timeZone),
-      label: "Until cash close",
-      detail: "U.S. cash session"
-    };
-  }
-  return {
-    open,
-    target: nextNasdaqCashOpen(parts),
-    label: isWeekday && minute < openMinute ? "Until cash open" : "Until next cash open",
-    detail: isWeekday ? "Pre/after-market" : "Weekend"
-  };
+  const cashClose = nasdaqCashCloseFor(date);
+  const closeMinute = cashClose.hour * 60 + (cashClose.minute || 0);
+  const cashDay = isNasdaqCashDay(date);
+  const open = cashDay && minute >= openMinute && minute < closeMinute;
+  if (open) return { open, target: zonedDateTimeToUtc(parts.year, parts.month, parts.day, cashClose.hour, cashClose.minute || 0, timeZone), label: cashClose.hour < 16 ? "Until early cash close" : "Until cash close", detail: "US100 cash session" };
+  return { open, target: nextNasdaqCashOpen(parts), label: cashDay && minute < openMinute ? "Until cash open" : "Until next cash open", detail: cashDay ? (minute < openMinute ? "Pre-market before cash open" : "After cash close") : "Cash market holiday/weekend" };
 }
 
 function updateClocks() {
@@ -184,7 +192,7 @@ function updateClocks() {
   $("#sgDate").textContent = `${formatter(SINGAPORE_TZ, { weekday: "short", day: "2-digit", month: "short" }).format(now)} · SGT`;
 
   const market = nasdaqMarketState(now);
-  $("#marketState").textContent = market.open ? "NASDAQ open" : "NASDAQ closed";
+  $("#marketState").textContent = market.open ? "US100 cash open" : "US100 cash closed";
   $("#marketStateDetail").textContent = market.detail;
   $("#marketCountdown").textContent = countdown(market.target - now);
   $("#marketCountdownLabel").textContent = market.label;
@@ -194,10 +202,11 @@ function updateClocks() {
     const state = sessionState(now, session);
     const card = $(`[data-session="${session.id}"]`);
     card.classList.toggle("open", state.open);
+    card.querySelector("h3").textContent = session.label;
     card.querySelector(".session-status").textContent = state.open ? "OPEN NOW" : "CLOSED";
     card.querySelector(".session-timer strong").textContent = countdown(state.target - now);
     card.querySelector(".session-timer small").textContent = state.open ? "Until close" : "Until open";
-    card.querySelector(".session-local-time")?.replaceChildren(`${state.openSg}–${state.closeSg} SGT`);
+    card.querySelector(".session-local-time")?.replaceChildren(`${state.openSg}-${state.closeSg} SGT ? ${session.note}`);
   });
 }
 
@@ -300,7 +309,7 @@ function mountTicker() {
 function mountChart(symbol = activeSymbol) {
   const compactChart = window.matchMedia("(max-width: 820px)").matches;
   activeSymbol = symbol;
-  const meta = widgetSymbols[symbol];
+  const meta = widgetSymbols[symbol] || widgetSymbols[activeSymbol] || { name: symbol, tag: "MARKET CHART" };
   $("#activeMarketName").textContent = meta.name;
   $("#activeMarketTag").textContent = meta.tag;
   $$("#marketTabs button").forEach(button => {
@@ -519,7 +528,7 @@ function newsEstimateLine(item) {
   const confidence = item.confidence_label || "low";
   const reason = item.impact_reason || "headline language";
   const method = item.verified_article ? "article verified" : "headline estimate";
-  return `Estimated impact · ${confidence} confidence · ${reason} · ${method}`;
+  return `Estimated US100 impact · ${confidence} confidence · ${reason} · ${method}`;
 }
 
 function marketEffect(item) {
@@ -529,15 +538,25 @@ function marketEffect(item) {
     if (read.key === "bearish") return "Yield pressure";
     return "Rates balanced";
   }
-  if (item.id === "VIX") {
+  if (item.id === "VXN") {
     if (read.key === "bullish") return "Risk appetite";
     if (read.key === "bearish") return "Volatility pressure";
     return "Volatility balanced";
   }
-  if (item.id === "SOXX") {
+  if (item.id === "DXY") {
+    if (read.key === "bullish") return "FX tailwind";
+    if (read.key === "bearish") return "Dollar pressure";
+    return "FX link muted";
+  }
+  if (item.id === "SOX") {
     if (read.key === "bullish") return "Chip / AI support";
     if (read.key === "bearish") return "Chip / AI drag";
     return "Semis balanced";
+  }
+  if (item.id === "DJI") {
+    if (read.key === "bullish") return "Broad risk support";
+    if (read.key === "bearish") return "Broad risk drag";
+    return "US30 balanced";
   }
   return read.label;
 }
@@ -575,7 +594,7 @@ function renderMarket(payload) {
   status.title = freshness.detail;
   setNeedle("#marketPulseNeedle", payload.pulse.score);
   $("#marketPulseTitle").textContent = payload.pulse.title || `Cross-market context ${sentiment(payload.pulse.score).phrase}`;
-  $("#marketPulseSummary").textContent = payload.pulse.summary || "Weighted from Nasdaq momentum, S&P 500 breadth, U.S. yields, VIX and semiconductors.";
+  $("#marketPulseSummary").textContent = payload.pulse.summary || "Weighted from US100/NDX momentum, US500/US30 confirmation, U.S. yields, VXN, semiconductors and the dollar.";
 
   payload.items.forEach(item => {
     const card = $(`[data-driver="${item.id}"]`);
@@ -599,14 +618,19 @@ function renderTotalPulse() {
   let weighted = 0;
   let weight = 0;
   if (latestMarketPulse) {
-    weighted += Number(latestMarketPulse.score || 0) * .65;
-    weight += .65;
+    weighted += Number(latestMarketPulse.score || 0) * .60;
+    weight += .60;
     parts.push(`Cross-market context ${sentiment(latestMarketPulse.score).phrase}`);
   }
   if (latestNewsPulse) {
-    weighted += Number(latestNewsPulse.score || 0) * .35;
-    weight += .35;
+    weighted += Number(latestNewsPulse.score || 0) * .30;
+    weight += .30;
     parts.push(`news narrative ${sentiment(latestNewsPulse.score).phrase}`);
+  }
+  if (latestCalendarPulse?.sample_size) {
+    weighted += Number(latestCalendarPulse.score || 0) * .10;
+    weight += .10;
+    parts.push(`latest macro result ${sentiment(latestCalendarPulse.score).phrase}`);
   }
 
   const status = $("#totalPulseStatus");
@@ -614,7 +638,7 @@ function renderTotalPulse() {
     status.className = "source-status offline";
     status.textContent = "NO DATA";
     $("#totalPulseTitle").textContent = "Total context unavailable";
-    $("#totalPulseSummary").textContent = "LiqueDT needs at least one verified market or news source before showing an assumption.";
+    $("#totalPulseSummary").textContent = "LiqueDT needs at least one verified market, calendar or news source before showing an assumption.";
     setNeedle("#totalPulseNeedle", 0);
     return;
   }
@@ -622,14 +646,20 @@ function renderTotalPulse() {
   const score = weighted / weight;
   const read = sentiment(score);
   const partial = !latestMarketPulse || !latestNewsPulse || latestMarketPulse?.backup || latestNewsPulse?.backup;
-  const highImpact = latestCalendar?.events?.filter(event => event.impact === "High").length || 0;
+  const highImpact = latestCalendar?.events?.filter(event => event.impact === "High" || event.nasdaq_relevance === "Critical").length || 0;
+  const latestResult = latestCalendarPulse?.latest_result;
   status.className = `source-status ${partial ? "delayed" : "live"}`;
   status.textContent = partial ? "PARTIAL / SNAPSHOT" : "LIVE COMBINED";
-  status.title = [latestMarketPulse?.freshness?.detail, latestNewsPulse?.freshness?.detail].filter(Boolean).join(" · ");
+  status.title = [latestMarketPulse?.freshness?.detail, latestNewsPulse?.freshness?.detail].filter(Boolean).join(" - ");
   setNeedle("#totalPulseNeedle", score);
-  $("#totalPulseTitle").textContent = `Total NASDAQ context ${read.phrase}`;
-  $("#totalPulseSummary").textContent = `${parts.join("; ")}. ${highImpact ? `${highImpact} high-impact USD event${highImpact === 1 ? " is" : "s are"} ahead, which can quickly invalidate the current read.` : "No listed high-impact USD event is currently adding event risk."}`;
-  const factors = [latestMarketPulse && `Markets: ${sentiment(latestMarketPulse.score).label}`, latestNewsPulse && `News: ${sentiment(latestNewsPulse.score).label}`, highImpact && `${highImpact} high-impact event${highImpact === 1 ? "" : "s"}`].filter(Boolean);
+  $("#totalPulseTitle").textContent = `Total US100 context ${read.phrase}`;
+  const eventLine = latestResult
+    ? `Latest result: ${latestResult.title} actual ${latestResult.actual || "released"}${latestResult.forecast ? ` vs forecast ${latestResult.forecast}` : ""} ? ${latestResult.result_bias} for US100 (${latestResult.result_reason}).`
+    : highImpact
+      ? `${highImpact} important USD event${highImpact === 1 ? " is" : "s are"} on watch; a fresh result can quickly invalidate the current read.`
+      : "No listed high-impact USD event is currently adding event-result pressure.";
+  $("#totalPulseSummary").textContent = `${parts.join("; ")}. ${eventLine}`;
+  const factors = [latestMarketPulse && `Markets: ${sentiment(latestMarketPulse.score).label}`, latestNewsPulse && `News: ${sentiment(latestNewsPulse.score).label}`, latestCalendarPulse?.sample_size && `Calendar: ${sentiment(latestCalendarPulse.score).label}`, highImpact && `${highImpact} event risk`].filter(Boolean);
   $("#totalPulseFactors").innerHTML = factors.map(factor => `<span>${escapeHtml(factor)}</span>`).join("");
 }
 
@@ -637,11 +667,12 @@ function renderCalendar(payload) {
   const status = $("#calendarStatus");
   if (!payload.ok || !payload.events?.length) {
     latestCalendar = null;
+    latestCalendarPulse = null;
     if (!WIDGETS_DISABLED) {
       status.className = "source-status delayed";
-      status.textContent = "LIVE BACKUP";
-      status.title = "Primary calendar feed is unavailable; TradingView calendar widget is loaded as a backup.";
-      setHealth("calendar", "delayed", "Backup", { summary: "Calendar: live backup widget", detail: status.title });
+      status.textContent = "LIVE WIDGET";
+      status.title = "Parsed calendar feed is unavailable; TradingView calendar widget is loaded temporarily.";
+      setHealth("calendar", "delayed", "Widget", { summary: "Calendar: live widget", detail: status.title });
       $("#calendarFreshnessNote").textContent = "Live backup widget · USD high/medium impact";
       mountWidget($("#calendarList"), "embed-widget-events.js", {
         colorTheme: "dark", isTransparent: true, width: "100%", height: 385,
@@ -659,6 +690,7 @@ function renderCalendar(payload) {
     return false;
   }
   latestCalendar = payload;
+  latestCalendarPulse = payload.pulse || null;
   const backup = Boolean(payload.stale || payload.static_snapshot);
   const freshness = statusFreshness(payload, "Calendar", { liveBadge: "LIVE FEED", maxAgeMinutes: 90 });
   status.className = `source-status ${backup ? "delayed" : "live"}`;
@@ -680,10 +712,14 @@ function renderCalendar(payload) {
       const time = event.time_utc
         ? formatter(SINGAPORE_TZ, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(event.time_utc))
         : "TBC";
-      const values = [event.forecast && `Fcst ${event.forecast}`, event.previous && `Prev ${event.previous}`].filter(Boolean).join(" · ") || "Details pending";
+      const values = [event.actual && `Actual ${event.actual}`, event.forecast && `Fcst ${event.forecast}`, event.previous && `Prev ${event.previous}`].filter(Boolean).join(" - ") || "Details pending";
+      const bias = event.result_bias || "pending";
+      const resultLine = event.result_status === "released"
+        ? `<p class="calendar-result ${escapeHtml(bias)}">US100 result read: ${escapeHtml(bias)} - ${escapeHtml(event.result_reason || "actual result released")}</p>`
+        : `<p class="calendar-reason">US100 watch: ${escapeHtml(event.nasdaq_relevance || "Watch")} - ${escapeHtml(event.nasdaq_reason || "USD event risk")}</p>`;
       return `<article class="calendar-item">
         <div class="calendar-time"><strong>${escapeHtml(time)}</strong><small>SGT</small></div>
-        <div class="calendar-copy"><h3>${escapeHtml(event.title)}</h3><p>USD · ${escapeHtml(values)}</p></div>
+        <div class="calendar-copy"><h3>${escapeHtml(event.title)}</h3><p>USD - ${escapeHtml(values)}</p>${resultLine}</div>
         <span class="impact ${event.impact === "High" ? "high" : "medium"}"><i></i>${escapeHtml(event.impact)}</span>
       </article>`;
     }).join("");
@@ -698,12 +734,12 @@ function renderNews(payload) {
   if (!payload.ok || !payload.items?.length) {
     if (!WIDGETS_DISABLED) {
       status.className = "source-status delayed";
-      status.textContent = "LIVE BACKUP";
-      status.title = "Primary news feed is unavailable; TradingView headline widget is loaded as a backup.";
-      setHealth("news", "delayed", "Backup", { summary: "News: live backup widget", detail: status.title });
+      status.textContent = "LIVE WIDGET";
+      status.title = "Parsed headline feed is unavailable; a live TradingView headline widget is loaded temporarily.";
+      setHealth("news", "delayed", "Widget", { summary: "News: live widget", detail: status.title });
       $("#newsFreshnessNote").textContent = "Live backup widget · source attribution shown per story";
       mountWidget($("#newsList"), "embed-widget-timeline.js", {
-        feedMode: "symbol", symbol: "NASDAQ:NDX", colorTheme: "dark",
+        feedMode: "symbol", symbol: "CAPITALCOM:US100", colorTheme: "dark",
         isTransparent: true, displayMode: "regular", width: "100%", height: 385, locale: "en"
       });
     } else {
@@ -733,12 +769,55 @@ function renderNews(payload) {
     <span class="news-effect ${escapeHtml(item.impact)}">${escapeHtml(item.impact || "mixed")}</span>
     <span class="news-copy"><h3>${escapeHtml(item.title)}</h3><p><span>${escapeHtml(item.source || "FXStreet")}</span><span>·</span><span>${escapeHtml(relativeTime(item.published))}</span></p></span>
   </a>`).join("");
-  $("#newsFreshnessNote").textContent = `${freshness.footer} · impact is estimated from headline text, not full-article verification`;
+  $("#newsFreshnessNote").textContent = `${freshness.footer} · US100 impact is estimated from headline text and source context, not full-article verification`;
   $("#newsList").innerHTML = payload.items.slice(0, 18).map(item => `<a class="news-item" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">
     <span class="news-effect ${escapeHtml(item.impact)}"><small>EST.</small>${escapeHtml(item.impact || "mixed")}</span>
     <span class="news-copy"><h3>${escapeHtml(item.title)}</h3><p><span>${escapeHtml(item.source || "FXStreet")}</span><span>·</span><span>${escapeHtml(relativeTime(item.published))}</span></p><p class="news-estimate">${escapeHtml(newsEstimateLine(item))}</p></span>
   </a>`).join("");
   renderPulse(payload.pulse, backup, freshness);
+  return true;
+}
+
+
+function renderCompanyCards(items = latestCompanies) {
+  const query = ($("#companySearch")?.value || "").trim().toLowerCase();
+  const filtered = query
+    ? items.filter(item => `${item.symbol || ""} ${item.name || ""}`.toLowerCase().includes(query))
+    : items;
+  const visible = filtered.slice(0, 120);
+  $("#companiesList").innerHTML = visible.map(item => {
+    const change = String(item.percent_change || item.net_change || "").trim();
+    const direction = change.startsWith("-") ? "down" : change.startsWith("+") ? "up" : "flat";
+    return `<article class="company-card ${direction}">
+      <span class="company-rank">${escapeHtml(item.rank || "")}</span>
+      <div class="company-main"><strong>${escapeHtml(item.symbol || "--")}</strong><span>${escapeHtml(item.name || "Name unavailable")}</span></div>
+      <div class="company-meta"><span>${escapeHtml(item.last_sale || "n/a")}</span><span>${escapeHtml(item.percent_change || item.net_change || "n/a")}</span><span>${escapeHtml(item.market_cap || "n/a")}</span></div>
+    </article>`;
+  }).join("") || '<div class="empty-feed">No matching Nasdaq-100 constituent found.</div>';
+  $("#companiesCount").textContent = `${filtered.length} shown`;
+}
+
+function renderCompanies(payload) {
+  const status = $("#companiesStatus");
+  if (!payload?.ok || !payload.items?.length) {
+    latestCompanies = [];
+    status.className = "source-status offline";
+    status.textContent = "UNAVAILABLE";
+    $("#companiesCount").textContent = "No data";
+    $("#companiesFreshnessNote").textContent = "Official Nasdaq constituent list unavailable right now";
+    $("#companiesList").innerHTML = '<div class="empty-feed">Nasdaq-100 constituents could not be loaded. Try refresh again later.</div>';
+    return false;
+  }
+  latestCompanies = payload.items;
+  const backup = Boolean(payload.stale || payload.static_snapshot);
+  const freshness = statusFreshness(payload, "Companies", { liveBadge: "NASDAQ LIVE", maxAgeMinutes: 1440 });
+  status.className = `source-status ${backup ? "delayed" : "live"}`;
+  status.textContent = backup ? freshness.badge : "NASDAQ LIVE";
+  status.title = freshness.detail;
+  const officialCount = payload.total_records || payload.items.length;
+  $("#companiesCount").textContent = `${payload.items.length} shown`;
+  $("#companiesFreshnessNote").textContent = `Official Nasdaq list ${payload.as_of ? `as of ${payload.as_of}` : freshness.footer} - ${officialCount} listings`;
+  renderCompanyCards(payload.items);
   return true;
 }
 
@@ -761,7 +840,7 @@ function renderPulse(pulse, backup = false, freshness = null) {
   status.title = freshness?.detail || "";
   $("#pulseNeedle").style.left = `${50 + score * 42}%`;
   $("#pulseTitle").textContent = pulse.title || "Balanced narrative";
-  $("#pulseSummary").textContent = pulse.summary || "Recent headlines contain mixed Nasdaq-sensitive language.";
+  $("#pulseSummary").textContent = pulse.summary || "Recent headlines contain mixed or neutral Nasdaq-sensitive language.";
   const factors = pulse.factors?.length ? pulse.factors : ["Rates", "AI", "Risk", "Earnings"];
   $("#pulseFactors").innerHTML = factors.slice(0, 4).map(factor => `<span>${escapeHtml(factor)}</span>`).join("");
   renderTotalPulse();
@@ -777,8 +856,8 @@ async function refreshData() {
   const button = $("#refreshData");
   button.classList.add("loading");
   button.disabled = true;
-  const [marketResult, calendarResult, newsResult, staticStatusResult] = await Promise.allSettled([
-    fetchJson("market"), fetchJson("calendar"), fetchJson("news"), fetchStaticStatus()
+  const [marketResult, calendarResult, newsResult, companiesResult, staticStatusResult] = await Promise.allSettled([
+    fetchJson("market"), fetchJson("calendar"), fetchJson("news"), fetchJson("companies"), fetchStaticStatus()
   ]);
   let successCount = 0;
   if (marketResult.status === "fulfilled" && renderMarket(marketResult.value)) successCount += 1;
@@ -787,6 +866,8 @@ async function refreshData() {
   else renderCalendar({ ok: false });
   if (newsResult.status === "fulfilled" && renderNews(newsResult.value)) successCount += 1;
   else renderNews({ ok: false });
+  if (companiesResult.status === "fulfilled" && renderCompanies(companiesResult.value)) successCount += 1;
+  else renderCompanies({ ok: false });
   if (staticStatusResult.status === "fulfilled") renderStaticStatus(staticStatusResult.value);
   updateFreshness(successCount);
   button.classList.remove("loading");
@@ -821,6 +902,7 @@ function bindEvents() {
     mountChart(button.dataset.openSymbol);
     $("#markets").scrollIntoView({ behavior: "smooth" });
   }));
+  $("#companySearch")?.addEventListener("input", () => renderCompanyCards());
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden && latestRefresh && Date.now() - latestRefresh > 300000) refreshData();
   });

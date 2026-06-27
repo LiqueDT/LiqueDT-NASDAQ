@@ -10,23 +10,24 @@
   <meta name="description" content="LiqueDT is a live NASDAQ market context companion for sessions, related markets, economic events and news.">
   <title>LiqueDT — NASDAQ market context</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="favicon-32.png?v=1.0.0" type="image/png" sizes="32x32">
-  <link rel="shortcut icon" href="favicon.ico?v=1.0.0" type="image/x-icon">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1.0.0">
-  <link rel="stylesheet" href="styles.css?v=1.0.0">
+  <link rel="icon" href="favicon-32.png?v=1.0.3" type="image/png" sizes="32x32">
+  <link rel="shortcut icon" href="favicon.ico?v=1.0.3" type="image/x-icon">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1.0.3">
+  <link rel="stylesheet" href="styles.css?v=1.0.3">
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to market overview</a>
 
   <header class="app-header">
     <a class="brand" href="#overview" aria-label="LiqueDT home">
-      <img src="icon.svg?v=1.0.0" alt="" width="40" height="40">
+      <img src="icon.svg?v=1.0.3" alt="" width="40" height="40">
       <span><strong>LiqueDT<span>.</span></strong><small>NASDAQ CONTEXT</small></span>
     </a>
 
     <nav class="desktop-nav primary-nav" aria-label="Primary navigation">
       <a class="active" href="#overview">Overview</a>
       <a href="#markets">Markets</a>
+      <a href="#companies">Companies</a>
       <a href="#calendar">Calendar</a>
       <a href="#news">News</a>
     </nav>
@@ -34,7 +35,7 @@
     <div class="market-header" aria-live="polite">
       <div class="market-header-status">
         <span id="marketDot" class="market-dot"></span>
-        <span><strong id="marketState">Checking market</strong><small id="marketStateDetail">Indicative OTC hours</small></span>
+        <span><strong id="marketState">Checking market</strong><small id="marketStateDetail">US100 cash hours</small></span>
       </div>
       <div class="header-countdown"><strong id="marketCountdown">--:--:--</strong><small id="marketCountdownLabel">Next change</small></div>
       <div class="sg-clock"><strong id="sgTime">--:--:--</strong><small id="sgDate">Singapore</small></div>
@@ -67,6 +68,7 @@
   <nav class="mobile-nav primary-nav" aria-label="Mobile navigation">
     <a class="active" href="#overview">Overview</a>
     <a href="#markets">Markets</a>
+    <a href="#companies">Companies</a>
     <a href="#calendar">Calendar</a>
     <a href="#news">News</a>
   </nav>
@@ -89,7 +91,7 @@
         <div class="pulse-gauge" aria-hidden="true"><span id="totalPulseNeedle"></span></div>
         <div class="pulse-labels"><span>Bearish</span><span>Balanced</span><span>Bullish</span></div>
         <h2 id="totalPulseTitle">Building the live market picture</h2>
-        <p id="totalPulseSummary">Combining Nasdaq movement, rates, volatility, semiconductors, headlines and upcoming USD event risk.</p>
+        <p id="totalPulseSummary">Combining US100/NDX movement, US500/US30 confirmation, rates, VXN, semiconductors, the dollar, headlines and USD results.</p>
         <div class="pulse-factors" id="totalPulseFactors"><span>Markets</span><span>News</span><span>Calendar</span></div>
         <p class="micro-disclaimer">Live context only · never a trading signal</p>
       </article>
@@ -97,13 +99,13 @@
       <div class="source-pulse-grid">
       <article class="pulse-card compact-pulse" aria-labelledby="marketPulseTitle">
         <div class="pulse-topline">
-          <p class="eyebrow">MARKETS AROUND NASDAQ</p>
+          <p class="eyebrow">MARKETS AROUND US100</p>
           <span id="marketPulseStatus" class="source-status waiting">CONNECTING</span>
         </div>
         <div class="pulse-gauge" aria-hidden="true"><span id="marketPulseNeedle"></span></div>
         <div class="pulse-labels"><span>Bearish</span><span>Balanced</span><span>Bullish</span></div>
         <h2 id="marketPulseTitle">Waiting for cross-market data</h2>
-        <p id="marketPulseSummary">Nasdaq momentum, S&P 500 breadth, U.S. yields, VIX and semiconductors are weighted by their relationship with the index.</p>
+        <p id="marketPulseSummary">US100/NDX momentum, US500/US30 confirmation, U.S. yields, VXN, semiconductors and DXY are weighted by their live correlation to Nasdaq-100.</p>
       </article>
 
       <article class="pulse-card compact-pulse" aria-labelledby="pulseTitle">
@@ -114,7 +116,7 @@
         <div class="pulse-gauge" aria-hidden="true"><span id="pulseNeedle"></span></div>
         <div class="pulse-labels"><span>Bearish</span><span>Balanced</span><span>Bullish</span></div>
         <h2 id="pulseTitle">Waiting for live headlines</h2>
-        <p id="pulseSummary">LiqueDT scores Nasdaq-sensitive language across recent headlines. It describes the current narrative; it does not predict the next candle.</p>
+        <p id="pulseSummary">LiqueDT scores US100-sensitive language across recent headlines. It describes the current narrative; it does not predict the next candle.</p>
         <div class="pulse-factors" id="pulseFactors">
           <span>Rates</span><span>Semis</span><span>Risk</span>
         </div>
@@ -127,7 +129,7 @@
     <section class="session-section" aria-labelledby="sessionsTitle">
       <div class="section-heading compact">
         <div><p class="eyebrow">MARKET WINDOWS · SGT</p><h2 id="sessionsTitle">Where liquidity is awake</h2></div>
-        <p>Session times follow regional daylight saving automatically.</p>
+        <p>US100 cash timing follows Nasdaq cash hours automatically, including U.S. daylight saving and known 2026 market holidays.</p>
       </div>
       <div id="sessionGrid" class="session-grid">
         <article class="session-card" data-session="asia">
@@ -137,12 +139,12 @@
         </article>
         <article class="session-card" data-session="london">
           <div class="session-number">02</div>
-          <div><span class="session-status">CHECKING</span><h3>London</h3><p class="session-local-time">Local market hours</p></div>
+          <div><span class="session-status">CHECKING</span><h3>Europe pre-market</h3><p class="session-local-time">Before U.S. cash open</p></div>
           <div class="session-timer"><strong>--:--:--</strong><small>Next change</small></div>
         </article>
         <article class="session-card" data-session="new-york">
           <div class="session-number">03</div>
-          <div><span class="session-status">CHECKING</span><h3>New York</h3><p class="session-local-time">Local market hours</p></div>
+          <div><span class="session-status">CHECKING</span><h3>U.S. cash session</h3><p class="session-local-time">09:30-16:00 New York</p></div>
           <div class="session-timer"><strong>--:--:--</strong><small>Next change</small></div>
         </article>
       </div>
@@ -150,23 +152,25 @@
 
     <section id="markets" class="market-section section-anchor" aria-labelledby="marketsTitle">
       <div class="section-heading">
-        <div><p class="eyebrow">CROSS-MARKET LENS</p><h2 id="marketsTitle">The markets around NASDAQ</h2></div>
-        <p>Tap a driver to bring its chart into focus. Nasdaq effect uses rolling correlation when available; weak regimes are muted.</p>
+        <div><p class="eyebrow">CROSS-MARKET LENS</p><h2 id="marketsTitle">The markets around US100</h2></div>
+        <p>Tap a driver to bring its chart into focus. US100 effect uses rolling Nasdaq-100 correlation; weak regimes are muted instead of forced.</p>
       </div>
 
       <div class="market-layout">
         <article class="chart-card">
           <div class="chart-toolbar">
             <div>
-              <span id="activeMarketTag">U.S. TECH INDEX</span>
-              <h3 id="activeMarketName">Nasdaq 100</h3>
+              <span id="activeMarketTag">PRIMARY US100 CASH CFD</span>
+              <h3 id="activeMarketName">US100 / Nasdaq 100 Cash CFD</h3>
             </div>
             <div id="marketTabs" class="market-tabs" role="tablist" aria-label="Chart symbol">
-              <button class="active" type="button" role="tab" aria-selected="true" data-symbol="NASDAQ:NDX" data-name="Nasdaq 100" data-tag="U.S. TECH INDEX">NDX</button>
-              <button type="button" role="tab" aria-selected="false" data-symbol="SP:SPX" data-name="S&amp;P 500" data-tag="BROAD U.S. RISK">SPX</button>
-              <button type="button" role="tab" aria-selected="false" data-symbol="OANDA:USB10YUSD" data-name="U.S. 10Y Bond Yield" data-tag="RATES ? OANDA">US10Y</button>
-              <button type="button" role="tab" aria-selected="false" data-symbol="TVC:VIX" data-name="CBOE Volatility Index" data-tag="VOLATILITY">VIX</button>
-              <button type="button" role="tab" aria-selected="false" data-symbol="NASDAQ:SOXX" data-name="Semiconductor ETF" data-tag="CHIP / AI LENS">SOXX</button>
+              <button class="active" type="button" role="tab" aria-selected="true" data-symbol="CAPITALCOM:US100">US100</button>
+              <button type="button" role="tab" aria-selected="false" data-symbol="CAPITALCOM:US500">US500</button>
+              <button type="button" role="tab" aria-selected="false" data-symbol="CAPITALCOM:US30">US30</button>
+              <button type="button" role="tab" aria-selected="false" data-symbol="TVC:US10Y">US10Y</button>
+              <button type="button" role="tab" aria-selected="false" data-symbol="CBOE:VXN">VXN</button>
+              <button type="button" role="tab" aria-selected="false" data-symbol="NASDAQ:SOX">SOX</button>
+              <button type="button" role="tab" aria-selected="false" data-symbol="TVC:DXY">DXY</button>
             </div>
           </div>
           <div id="marketChart" class="market-chart tradingview-widget-container" aria-label="Interactive market chart"></div>
@@ -175,37 +179,69 @@
 
         <aside class="driver-stack" aria-label="Nasdaq market drivers">
           <article class="driver-card" data-driver="NDX">
-            <div><span class="driver-icon">NQ</span><span class="relationship">Primary index</span></div>
-            <h3>Nasdaq 100</h3>
-            <p>The reference market. Intraday index momentum anchors the combined NASDAQ context.</p>
-            <button type="button" data-open-symbol="NASDAQ:NDX">Open NDX chart <span>&#8599;</span></button>
+            <div><span class="driver-icon">NQ</span><span class="relationship">Primary US100 lens</span></div>
+            <h3>US100 / Nasdaq 100</h3>
+            <p>The reference market. Intraday Nasdaq-100 momentum anchors the combined US100 context.</p>
+            <button type="button" data-open-symbol="CAPITALCOM:US100">Open US100 chart <span>&#8599;</span></button>
           </article>
           <article class="driver-card" data-driver="SPX">
-            <div><span class="driver-icon">SP</span><span class="relationship">Broad risk tape</span></div>
-            <h3>S&P 500</h3>
-            <p>Broad U.S. equity breadth helps confirm whether Nasdaq movement is isolated tech flow or wider risk appetite.</p>
-            <button type="button" data-open-symbol="SP:SPX">Open SPX chart <span>&#8599;</span></button>
+            <div><span class="driver-icon">SP</span><span class="relationship">US500 confirmation</span></div>
+            <h3>S&P 500 / US500</h3>
+            <p>Broad U.S. equity breadth helps confirm whether US100 movement is isolated tech flow or wider risk appetite.</p>
+            <button type="button" data-open-symbol="CAPITALCOM:US500">Open US500 chart <span>&#8599;</span></button>
+          </article>
+          <article class="driver-card" data-driver="DJI">
+            <div><span class="driver-icon">DJ</span><span class="relationship">US30 sentiment</span></div>
+            <h3>Dow Jones / US30</h3>
+            <p>US30 helps show whether the move is broad U.S. risk-on/risk-off or mostly Nasdaq-specific tech flow.</p>
+            <button type="button" data-open-symbol="CAPITALCOM:US30">Open US30 chart <span>&#8599;</span></button>
           </article>
           <article class="driver-card" data-driver="US10Y">
             <div><span class="driver-icon">%</span><span class="relationship">Usually inverse</span></div>
             <h3>Rates & yields</h3>
             <p>Higher yields can pressure long-duration growth stocks; falling yields can relieve valuation pressure.</p>
-            <button type="button" data-open-symbol="OANDA:USB10YUSD">Open US10Y chart <span>&#8599;</span></button>
+            <button type="button" data-open-symbol="TVC:US10Y">Open US10Y chart <span>&#8599;</span></button>
           </article>
-          <article class="driver-card" data-driver="VIX">
-            <div><span class="driver-icon">V</span><span class="relationship">Volatility lens</span></div>
-            <h3>VIX</h3>
-            <p>Rising volatility often signals risk-off pressure; falling volatility can support equity risk appetite.</p>
-            <button type="button" data-open-symbol="TVC:VIX">Open VIX chart <span>&#8599;</span></button>
+          <article class="driver-card" data-driver="VXN">
+            <div><span class="driver-icon">VX</span><span class="relationship">Direct volatility lens</span></div>
+            <h3>Nasdaq volatility</h3>
+            <p>VXN is derived from Nasdaq-100 options, making it a more direct stress gauge than broad-market VIX.</p>
+            <button type="button" data-open-symbol="CBOE:VXN">Open VXN chart <span>&#8599;</span></button>
           </article>
-          <article class="driver-card" data-driver="SOXX">
+          <article class="driver-card" data-driver="SOX">
             <div><span class="driver-icon">AI</span><span class="relationship">Chip / AI lens</span></div>
-            <h3>Semiconductors</h3>
-            <p>Chip and AI leadership often drives Nasdaq concentration. Weak semis can drag even when the wider tape is stable.</p>
-            <button type="button" data-open-symbol="NASDAQ:SOXX">Open SOXX chart <span>&#8599;</span></button>
+            <h3>PHLX Semiconductors</h3>
+            <p>SOX tracks semiconductor leadership, a major driver of Nasdaq concentration and the AI investment cycle.</p>
+            <button type="button" data-open-symbol="NASDAQ:SOX">Open SOX chart <span>&#8599;</span></button>
+          </article>
+          <article class="driver-card" data-driver="DXY">
+            <div><span class="driver-icon">$</span><span class="relationship">Conditional FX lens</span></div>
+            <h3>U.S. dollar</h3>
+            <p>A stronger dollar can tighten global financial conditions and reduce translated overseas revenue; its live correlation is allowed to mute or flip.</p>
+            <button type="button" data-open-symbol="TVC:DXY">Open DXY chart <span>&#8599;</span></button>
           </article>
         </aside>
       </div>
+    </section>
+
+
+    <section id="companies" class="companies-section section-anchor" aria-labelledby="companiesTitle">
+      <div class="section-heading">
+        <div><p class="eyebrow">NASDAQ-100 CONSTITUENTS</p><h2 id="companiesTitle">Current companies inside Nasdaq-100</h2></div>
+        <p>Official Nasdaq constituent list with live last sale, daily change and market cap when the source provides it.</p>
+      </div>
+      <article class="companies-panel">
+        <div class="companies-toolbar">
+          <div><span id="companiesCount">Checking...</span><small id="companiesFreshnessNote">Loading official Nasdaq list</small></div>
+          <div class="companies-actions">
+            <input id="companySearch" type="search" placeholder="Search symbol or company" aria-label="Search Nasdaq-100 companies">
+            <span id="companiesStatus" class="source-status waiting">CONNECTING</span>
+          </div>
+        </div>
+        <div id="companiesList" class="companies-list" aria-live="polite">
+          <div class="loading-row"><span></span><p>Loading Nasdaq-100 constituents...</p></div>
+        </div>
+      </article>
     </section>
 
     <section id="calendar" class="intel-grid calendar-section section-anchor" aria-label="Economic calendar">
@@ -228,7 +264,7 @@
           <span id="newsStatus" class="source-status waiting">CONNECTING</span>
         </div>
         <div id="newsList" class="news-list" aria-live="polite">
-          <div class="loading-row"><span></span><p>Scanning Nasdaq-sensitive headlines…</p></div>
+          <div class="loading-row"><span></span><p>Scanning US100-sensitive headlines…</p></div>
         </div>
         <div class="panel-footer"><span id="newsFreshnessNote">Estimated from headlines · source attribution shown per story</span><a href="https://news.google.com/search?q=Nasdaq%20100%20OR%20NDX%20OR%20QQQ%20technology%20stocks" target="_blank" rel="noreferrer">More Nasdaq news ↗</a></div>
       </article>
@@ -244,7 +280,7 @@
   </main>
 
   <footer>
-    <a class="brand footer-brand" href="#overview"><img src="icon.svg?v=1.0.0" alt="" width="32" height="32"><strong>LiqueDT<span>.</span></strong></a>
+    <a class="brand footer-brand" href="#overview"><img src="icon.svg?v=1.0.3" alt="" width="32" height="32"><strong>LiqueDT<span>.</span></strong></a>
     <p>Liquidity context for NASDAQ · Singapore time everywhere</p>
     <p>Market hours are indicative and can vary by broker and holiday.</p>
   </footer>
@@ -254,7 +290,7 @@
       <button class="dialog-close" aria-label="Close">×</button>
       <p class="eyebrow">METHODOLOGY</p>
       <h2>A narrative compass, not a forecast.</h2>
-      <p>LiqueDT scans recent Nasdaq-sensitive headlines for language around rates, AI/semiconductors, mega-cap earnings, volatility and risk. It assigns a small estimated directional weight, reason and confidence, then aggregates the result into bearish, balanced or bullish narrative context.</p>
+      <p>LiqueDT scans recent US100-sensitive headlines for language around rates, AI/semiconductors, mega-cap earnings, volatility and risk. It assigns a small estimated directional weight, reason and confidence, then aggregates the result into bearish, balanced or bullish narrative context.</p>
       <p>News impact is a headline estimate, not full-article verification. Cross-market effects use rolling correlation when available, but relationships can invert and price may already reflect the story. Always read the underlying source. This feature must never be used as a standalone reason to trade.</p>
       <button class="primary-button" value="close">Understood</button>
     </form>
@@ -280,6 +316,6 @@
   </dialog>
 
   <noscript><div class="noscript">LiqueDT needs JavaScript for live clocks, data and charts.</div></noscript>
-  <script src="app.js?v=1.0.0" defer></script>
+  <script src="app.js?v=1.0.3" defer></script>
 </body>
 </html>

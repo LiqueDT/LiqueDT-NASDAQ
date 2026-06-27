@@ -1,4 +1,4 @@
-﻿"""LiqueDT local gateway: static PWA + cached, normalized market-context feeds."""
+"""LiqueDT local gateway: static PWA + cached, normalized market-context feeds."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ NEWS_FEEDS = (
     ("https://www.fxstreet.com/rss/news", "FXStreet"),
     ("https://feeds.finance.yahoo.com/rss/2.0/headline?s=%5ENDX&region=US&lang=en-US", "Yahoo Finance NDX"),
     ("https://feeds.finance.yahoo.com/rss/2.0/headline?s=QQQ&region=US&lang=en-US", "Yahoo Finance QQQ"),
-    ("https://news.google.com/rss/search?q=%28US100%20OR%20Nasdaq%20OR%20%22Nasdaq%20100%22%20OR%20NDX%20OR%20QQQ%20OR%20%22tech%20stocks%22%20OR%20AI%20OR%20semiconductor%20OR%20VXN%20OR%20%22Treasury%20yields%22%29%20%28Fed%20OR%20yields%20OR%20CPI%20OR%20PCE%20OR%20Nvidia%20OR%20Apple%20OR%20Microsoft%20OR%20earnings%20OR%20tariff%20OR%20Trump%20OR%20chip%29&hl=en-US&gl=US&ceid=US%3Aen", "Google News"),
+    ("https://news.google.com/rss/search?q=%28US100%20OR%20NAS100%20OR%20Nasdaq%20OR%20%22Nasdaq%20100%22%20OR%20NDX%20OR%20QQQ%20OR%20%22tech%20stocks%22%20OR%20AI%20OR%20semiconductor%20OR%20VXN%20OR%20%22Treasury%20yields%22%29%20%28Fed%20OR%20yields%20OR%20CPI%20OR%20PCE%20OR%20Nvidia%20OR%20Apple%20OR%20Microsoft%20OR%20earnings%20OR%20tariff%20OR%20Trump%20OR%20chip%29&hl=en-US&gl=US&ceid=US%3Aen", "Google News"),
 )
 CALENDAR_URLS = (
     "https://nfs.faireconomy.media/ff_calendar_thisweek.xml",
@@ -68,7 +68,7 @@ MACRO_TERMS = (
 POLICY_TERMS = ("trump", "white house", "china tech", "chip export", "export controls", "tech tariff", "antitrust")
 
 MARKET_SERIES = (
-    {"id": "NDX", "ticker": "^NDX", "name": "US100 / Nasdaq 100", "relation": 1.0, "weight": 0.28, "move_scale": 1.25},
+    {"id": "NDX", "ticker": "^NDX", "name": "NAS100 / Nasdaq 100", "relation": 1.0, "weight": 0.28, "move_scale": 1.25},
     {"id": "SPX", "ticker": "^GSPC", "name": "S&P 500 / US500", "relation": 1.0, "weight": 0.17, "move_scale": 1.00},
     {"id": "DJI", "ticker": "^DJI", "name": "Dow Jones / US30", "relation": 1.0, "weight": 0.07, "move_scale": 0.90},
     {"id": "US10Y", "ticker": "^TNX", "name": "U.S. 10Y yield", "relation": -1.0, "weight": 0.16, "move_scale": 2.00},
@@ -167,8 +167,18 @@ def safe_external_url(value: str, fallback: str) -> str:
     return fallback
 
 
+def finite_float(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
 def pearson(values_a: list[float], values_b: list[float]) -> float | None:
     if len(values_a) != len(values_b) or len(values_a) < 6:
+        return None
+    if not all(math.isfinite(value) for value in values_a + values_b):
         return None
     mean_a = sum(values_a) / len(values_a)
     mean_b = sum(values_b) / len(values_b)
@@ -176,16 +186,19 @@ def pearson(values_a: list[float], values_b: list[float]) -> float | None:
     centered_b = [value - mean_b for value in values_b]
     denom_a = math.sqrt(sum(value * value for value in centered_a))
     denom_b = math.sqrt(sum(value * value for value in centered_b))
-    if not denom_a or not denom_b:
+    if not denom_a or not denom_b or not math.isfinite(denom_a) or not math.isfinite(denom_b):
         return None
-    return sum(a * b for a, b in zip(centered_a, centered_b)) / (denom_a * denom_b)
+    result = sum(a * b for a, b in zip(centered_a, centered_b)) / (denom_a * denom_b)
+    return result if math.isfinite(result) else None
 
 
 def daily_returns(closes: list[float]) -> list[float]:
     output: list[float] = []
     for previous, current in zip(closes, closes[1:]):
-        if previous:
-            output.append((current - previous) / previous)
+        if previous and math.isfinite(previous) and math.isfinite(current):
+            change = (current - previous) / previous
+            if math.isfinite(change):
+                output.append(change)
     return output
 
 
@@ -196,11 +209,11 @@ def rolling_corr(primary: list[float], secondary: list[float], window: int) -> f
     primary_returns = daily_returns(primary[-(window + 1):])
     secondary_returns = daily_returns(secondary[-(window + 1):])
     value = pearson(primary_returns, secondary_returns)
-    return None if value is None else round(max(-1.0, min(1.0, value)), 3)
+    return None if value is None or not math.isfinite(value) else round(max(-1.0, min(1.0, value)), 3)
 
 
 def correlation_strength(value: float | None) -> str:
-    if value is None:
+    if value is None or not math.isfinite(value):
         return "unavailable"
     absolute = abs(value)
     if absolute >= 0.55:
@@ -213,7 +226,7 @@ def correlation_strength(value: float | None) -> str:
 
 
 def correlation_label(value: float | None) -> str:
-    if value is None:
+    if value is None or not math.isfinite(value):
         return "correlation unavailable"
     if value >= 0.18:
         return "positive correlation"
@@ -225,16 +238,14 @@ def correlation_label(value: float | None) -> str:
 def effective_relation(series: dict[str, Any], corr_60: float | None) -> float:
     if series["id"] == "NDX":
         return 1.0
-    if corr_60 is None:
+    if corr_60 is None or not math.isfinite(corr_60):
         return float(series["relation"]) * 0.65
     if abs(corr_60) < 0.18:
         return 0.0
     return corr_60
-
-
 def correlation_note(series: dict[str, Any], corr_20: float | None, corr_60: float | None) -> str:
     if series["id"] == "NDX":
-        return "Primary US100 / Nasdaq-100 momentum anchor"
+        return "Primary NAS100 / Nasdaq-100 momentum anchor"
     if corr_60 is None:
         return "Using macro assumption; rolling correlation unavailable"
     expected = float(series["relation"])
@@ -252,7 +263,12 @@ def load_daily_closes_yahoo(ticker: str) -> list[float]:
     payload = json.loads(fetch_bytes(url).decode("utf-8"))
     result = payload["chart"]["result"][0]
     closes = result["indicators"]["quote"][0]["close"]
-    return [float(value) for value in closes if value is not None]
+    output: list[float] = []
+    for value in closes:
+        number = finite_float(value)
+        if number is not None:
+            output.append(number)
+    return output
 
 
 def contains_term(value: str, term: str) -> bool:
@@ -424,7 +440,7 @@ def load_news() -> dict[str, Any]:
     items = items[:18]
 
     if not items:
-        raise ValueError("No relevant US100 news items in upstream feed")
+        raise ValueError("No relevant NASDAQ news items in upstream feed")
 
     total_score = sum(int(item.get("direction_score", 0)) for item in items)
     factors = {}
@@ -433,14 +449,14 @@ def load_news() -> dict[str, Any]:
             factors[factor] = factors.get(factor, 0) + 1
     normalized_score = max(-1.0, min(1.0, total_score / max(4, len(items) * 1.5)))
     if normalized_score >= 0.2:
-        title = "Headlines lean supportive for US100"
+        title = "Headlines lean supportive for NASDAQ"
         summary = "Recent coverage emphasizes language that can support Nasdaq risk appetite, but price may already reflect the narrative."
     elif normalized_score <= -0.2:
-        title = "Headlines lean restrictive for US100"
+        title = "Headlines lean restrictive for NASDAQ"
         summary = "Recent coverage emphasizes language that can pressure Nasdaq growth/risk appetite, though cross-market confirmation still matters."
     else:
-        title = "The US100 narrative is balanced"
-        summary = "Recent headlines contain mixed US100-sensitive language with no clear aggregate lean."
+        title = "The NASDAQ narrative is balanced"
+        summary = "Recent headlines contain mixed NASDAQ-sensitive language with no clear aggregate lean."
 
     return {
         "ok": True,
@@ -514,11 +530,13 @@ def load_market() -> dict[str, Any]:
             payload = json.loads(fetch_bytes(url).decode("utf-8"))
             result = payload["chart"]["result"][0]
             meta = result["meta"]
-            price = float(meta["regularMarketPrice"])
-            previous = float(meta.get("chartPreviousClose") or meta.get("previousClose"))
-            if not previous:
+            price = finite_float(meta.get("regularMarketPrice"))
+            previous = finite_float(meta.get("chartPreviousClose") or meta.get("previousClose"))
+            if price is None or previous is None or not previous:
                 continue
             change_percent = (price - previous) / previous * 100
+            if not math.isfinite(change_percent):
+                continue
             normalized_move = max(-1.0, min(1.0, change_percent / float(series["move_scale"])))
             series_history = histories.get(str(series["ticker"]), [])
             if series["id"] == "NDX":
@@ -528,6 +546,8 @@ def load_market() -> dict[str, Any]:
                 corr_60 = rolling_corr(primary_history, series_history, 60)
             relation_used = effective_relation(series, corr_60)
             nasdaq_score = normalized_move * relation_used
+            if not math.isfinite(relation_used) or not math.isfinite(nasdaq_score):
+                continue
             weight = float(series["weight"])
             weighted_score += nasdaq_score * weight
             total_weight += weight
@@ -559,7 +579,7 @@ def load_market() -> dict[str, Any]:
     else:
         title = "Cross-market context is balanced"
     strongest = sorted(items, key=lambda item: abs(item["nasdaq_score"]), reverse=True)[:3]
-    summary = "Correlation-aware US100 movement: " + ", ".join(
+    summary = "Correlation-aware NASDAQ movement: " + ", ".join(
         f'{item["id"]} {"supports" if item["nasdaq_score"] > .1 else "pressures" if item["nasdaq_score"] < -.1 else "is neutral for"} Nasdaq ({item.get("correlation_label", "correlation n/a")})'
         for item in strongest
     ) + ". The gauge is driven by each market move multiplied by its rolling Nasdaq-100 correlation; weak regimes are muted."
@@ -570,8 +590,6 @@ def load_market() -> dict[str, Any]:
         "items": items,
         "pulse": {"score": round(score, 3), "sample_size": len(items), "title": title, "summary": summary},
     }
-
-
 def new_york_timezone(local_date: datetime):
     if ZoneInfo is not None:
         try:
@@ -656,18 +674,18 @@ def calendar_result_effect(title: str, actual: str, forecast: str, previous: str
         return {"status": "released", "bias": "bearish" if hotter else "bullish", "score": -0.45 if hotter else 0.45, "reason": "stronger jobs can revive rate-pressure risk" if hotter else "softer jobs can support rate-relief expectations"}
     if any(term in normalized for term in growth_terms):
         return {"status": "released", "bias": "bullish" if hotter else "bearish", "score": 0.35 if hotter else -0.35, "reason": "stronger growth supports equity risk appetite" if hotter else "weaker growth can pressure risk sentiment"}
-    return {"status": "released", "bias": "mixed", "score": 0.0, "reason": "result released; US100 effect depends on yields and risk reaction"}
+    return {"status": "released", "bias": "mixed", "score": 0.0, "reason": "result released; NASDAQ effect depends on yields and risk reaction"}
 
 
 def calendar_pulse(events: list[dict[str, Any]]) -> dict[str, Any]:
     released = [event for event in events if event.get("result_status") == "released" and event.get("result_bias") in {"bullish", "bearish"}]
     released.sort(key=lambda event: event.get("time_utc") or "", reverse=True)
     if not released:
-        return {"score": 0.0, "sample_size": 0, "title": "No fresh USD result yet", "summary": "Upcoming events are on watch, but no released result is currently biasing US100.", "factors": ["Event risk"], "latest_result": None}
+        return {"score": 0.0, "sample_size": 0, "title": "No fresh USD result yet", "summary": "Upcoming events are on watch, but no released result is currently biasing NASDAQ.", "factors": ["Event risk"], "latest_result": None}
     score = max(-1.0, min(1.0, sum(float(event.get("result_score") or 0) for event in released) / max(1, len(released))))
     latest = released[0]
     read = "bullish" if score >= 0.18 else "bearish" if score <= -0.18 else "mixed"
-    return {"score": round(score, 3), "sample_size": len(released), "title": f"Fresh USD result leans {read} for US100", "summary": f"Latest result: {latest.get('title')} actual {latest.get('actual') or 'released'} vs forecast {latest.get('forecast') or 'n/a'}; {latest.get('result_reason')}", "factors": ["USD result", latest.get("nasdaq_relevance") or "Event risk"], "latest_result": latest}
+    return {"score": round(score, 3), "sample_size": len(released), "title": f"Fresh USD result leans {read} for NASDAQ", "summary": f"Latest result: {latest.get('title')} actual {latest.get('actual') or 'released'} vs forecast {latest.get('forecast') or 'n/a'}; {latest.get('result_reason')}", "factors": ["USD result", latest.get("nasdaq_relevance") or "Event risk"], "latest_result": latest}
 
 
 def calendar_relevance(title: str) -> tuple[str, str] | None:
@@ -775,7 +793,7 @@ class LiqueDTHandler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def send_json(self, payload: dict[str, Any], status: int = 200) -> None:
-        body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        body = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))

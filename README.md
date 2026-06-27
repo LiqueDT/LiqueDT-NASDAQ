@@ -1,4 +1,4 @@
-# LiqueDT ? US100 market context
+# LiqueDT - NASDAQ market context
 
 LiqueDT NASDAQ is a live, Singapore-time companion for the Nasdaq 100: market windows, related cross-market drivers, high-impact USD events, and Nasdaq-sensitive headlines. It contains no trading or execution features.
 
@@ -6,7 +6,7 @@ LiqueDT NASDAQ is a live, Singapore-time companion for the Nasdaq 100: market wi
 
 Open `dist\LiqueDT-NASDAQ.exe`. It launches LiqueDT in a dedicated desktop window with its own local data gateway. Keep the adjacent `app` folder beside the executable.
 
-To share it, send the latest ZIP in `release\v1.0.3\`. The recipient must extract the whole ZIP into a new folder before running `LiqueDT-NASDAQ.exe`.
+To share it, send the latest ZIP in `release\v1.0.6\`. The recipient must extract the whole ZIP into a new folder before running `LiqueDT-NASDAQ.exe`.
 
 ## iPhone / GitHub Pages app
 

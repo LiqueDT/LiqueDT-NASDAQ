@@ -1,5 +1,5 @@
 {
-  "name": "LiqueDT ? US100 Market Context",
+  "name": "LiqueDT - NASDAQ Market Context",
   "short_name": "LiqueDT",
   "description": "Live NASDAQ sessions, cross-market context, economic events and news in Singapore time.",
   "start_url": "./",

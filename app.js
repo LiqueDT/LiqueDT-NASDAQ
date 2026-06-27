@@ -6,26 +6,26 @@ const SINGAPORE_TZ = "Asia/Singapore";
 const formatterCache = new Map();
 
 const sessions = [
-  { id: "asia", label: "Asia / overnight", note: "Futures and overnight sentiment; usually slower for US100.cash", anchorTimeZone: "Asia/Singapore", open: { timeZone: "Asia/Singapore", hour: 8, minute: 0 }, close: { timeZone: "Asia/Singapore", hour: 16, minute: 0 } },
+  { id: "asia", label: "Asia / overnight", note: "Futures and overnight sentiment; usually slower for NAS100.cash", anchorTimeZone: "Asia/Singapore", open: { timeZone: "Asia/Singapore", hour: 8, minute: 0 }, close: { timeZone: "Asia/Singapore", hour: 16, minute: 0 } },
   { id: "london", label: "Europe pre-market", note: "Europe flow before Nasdaq cash open; direction can start building", anchorTimeZone: "America/New_York", requiresCashDay: true, open: { timeZone: "Europe/London", hour: 8, minute: 0 }, close: { timeZone: "America/New_York", hour: 9, minute: 30 } },
-  { id: "new-york", label: "U.S. cash session", note: "Main US100 liquidity window; first 15-30 min can fake out", anchorTimeZone: "America/New_York", requiresCashDay: true, cashSession: true, open: { timeZone: "America/New_York", hour: 9, minute: 30 }, close: { cashClose: true } }
+  { id: "new-york", label: "U.S. cash session", note: "Main NASDAQ liquidity window; first 15-30 min can fake out", anchorTimeZone: "America/New_York", requiresCashDay: true, cashSession: true, open: { timeZone: "America/New_York", hour: 9, minute: 30 }, close: { cashClose: true } }
 ];
 
 const nasdaqClosedDates = new Set(["2026-01-01", "2026-01-19", "2026-02-16", "2026-04-03", "2026-05-25", "2026-06-19", "2026-07-03", "2026-09-07", "2026-11-26", "2026-12-25"]);
 const nasdaqEarlyCloses = new Map([["2026-11-27", { hour: 13, minute: 0 }], ["2026-12-24", { hour: 13, minute: 0 }]]);
 
 const widgetSymbols = {
-  "CAPITALCOM:US100": { name: "US100 / Nasdaq 100 Cash CFD", tag: "PRIMARY US100 CASH CFD" },
+  "CAPITALCOM:US100": { name: "NAS100 / Nasdaq 100 Cash CFD", tag: "PRIMARY NAS100 CASH CFD" },
   "CAPITALCOM:US500": { name: "US500 / S&P 500 Cash CFD", tag: "US500 / BROAD RISK CONFIRMATION" },
   "CAPITALCOM:US30": { name: "US30 / Dow Cash CFD", tag: "US30 / BROADER SENTIMENT" },
-  "TVC:US10Y": { name: "U.S. 10Y Treasury Yield", tag: "DURATION / RATES" },
-  "CBOE:VXN": { name: "Nasdaq-100 Volatility Index", tag: "NASDAQ-SPECIFIC FEAR" },
-  "NASDAQ:SOX": { name: "PHLX Semiconductor Index", tag: "CHIP / AI LEADERSHIP" },
-  "TVC:DXY": { name: "U.S. Dollar Index", tag: "GLOBAL FX CONDITIONS" }
+  "TVC:US10Y": { name: "U.S. 10Y Treasury Yield", tag: "DURATION / RATES", interval: "D", overviewInterval: "1D", range: "12M", overview: true },
+  "CBOE:VXN": { name: "Nasdaq-100 Volatility Index", tag: "NASDAQ-SPECIFIC FEAR", interval: "D", overviewInterval: "1D", range: "12M", overview: true },
+  "NASDAQ:SOX": { name: "PHLX Semiconductor Index", tag: "CHIP / AI LEADERSHIP", interval: "D", overviewInterval: "1D", range: "12M", overview: true },
+  "TVC:DXY": { name: "U.S. Dollar Index", tag: "GLOBAL FX CONDITIONS", interval: "D", overviewInterval: "1D", range: "12M", overview: true }
 };
 
 const tickerDefinitions = [
-  { id: "NDX", label: "US100 / NDX", fallback: "US100" },
+  { id: "NDX", label: "NAS100 / NDX", fallback: "NAS100" },
   { id: "SPX", label: "US500", fallback: "SPX" },
   { id: "DJI", label: "US30", fallback: "US30" },
   { id: "US10Y", label: "U.S. 10Y", fallback: "US10Y" },
@@ -49,7 +49,7 @@ const healthMeta = { market: null, charts: null, news: null, calendar: null };
 const healthLabels = { market: "Markets", charts: "Charts", news: "News", calendar: "Calendar" };
 
 function escapeHtml(value) {
-  return String(value - "")
+  return String(value ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
@@ -180,8 +180,8 @@ function nasdaqMarketState(now) {
   const closeMinute = cashClose.hour * 60 + (cashClose.minute || 0);
   const cashDay = isNasdaqCashDay(date);
   const open = cashDay && minute >= openMinute && minute < closeMinute;
-  if (open) return { open, target: zonedDateTimeToUtc(parts.year, parts.month, parts.day, cashClose.hour, cashClose.minute || 0, timeZone), label: cashClose.hour < 16 ? "Until early cash close" : "Until cash close", detail: "US100 cash session" };
-  return { open, target: nextNasdaqCashOpen(parts), label: cashDay && minute < openMinute ? "Until cash open" : "Until next cash open", detail: cashDay ? (minute < openMinute ? "Pre-market before cash open" : "After cash close") : "Cash market holiday/weekend" };
+  if (open) return { open, target: zonedDateTimeToUtc(parts.year, parts.month, parts.day, cashClose.hour, cashClose.minute || 0, timeZone), label: cashClose.hour < 16 ? "Until early NASDAQ cash close" : "Until NASDAQ cash close", detail: "NASDAQ cash session" };
+  return { open, target: nextNasdaqCashOpen(parts), label: cashDay && minute < openMinute ? "Until NASDAQ cash open" : "Until next NASDAQ cash open", detail: cashDay ? (minute < openMinute ? "Pre-market before NASDAQ cash open" : "After NASDAQ cash close") : "NASDAQ cash market holiday/weekend" };
 }
 
 function updateClocks() {
@@ -189,10 +189,10 @@ function updateClocks() {
   $("#sgTime").textContent = formatter(SINGAPORE_TZ, {
     hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23"
   }).format(now);
-  $("#sgDate").textContent = `${formatter(SINGAPORE_TZ, { weekday: "short", day: "2-digit", month: "short" }).format(now)} · SGT`;
+  $("#sgDate").textContent = `${formatter(SINGAPORE_TZ, { weekday: "short", day: "2-digit", month: "short" }).format(now)} - SGT`;
 
   const market = nasdaqMarketState(now);
-  $("#marketState").textContent = market.open ? "US100 cash open" : "US100 cash closed";
+  $("#marketState").textContent = market.open ? "NASDAQ cash open" : "NASDAQ cash closed";
   $("#marketStateDetail").textContent = market.detail;
   $("#marketCountdown").textContent = countdown(market.target - now);
   $("#marketCountdownLabel").textContent = market.label;
@@ -233,7 +233,7 @@ function renderHealthSummary() {
     title = delayed.some(text => text.toLowerCase().includes("stale")) ? "Using stale snapshot data" : "Live with snapshot data";
     const build = latestStaticBuild?.snapshot_generated_at || latestStaticBuild?.updated_at;
     const buildDetail = build ? `GitHub checked ${sgtClock(build)} SGT (${ageLabel(build)})` : "";
-    detail = [buildDetail, delayed.length ? delayed.join(" · ") : "A cached or backup source is currently active"].filter(Boolean).join(" · ");
+    detail = [buildDetail, delayed.length ? delayed.join(" - ") : "A cached or backup source is currently active"].filter(Boolean).join(" - ");
   }
   dot.className = `health-dot ${state}`;
   summary.textContent = title;
@@ -267,19 +267,24 @@ function mountWidget(container, scriptName, config, healthKey = null) {
   container.append(shell, script);
 }
 
-function tickerNumber(value, fallback = "--") {
+function finiteNumber(value, fallback = null) {
+  if (value === null || value === undefined || value === "" || value === "NaN") return fallback;
   const number = Number(value);
-  if (!Number.isFinite(number)) return fallback;
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function tickerNumber(value, fallback = "--") {
+  const number = finiteNumber(value, null);
+  if (number === null) return fallback;
   const decimals = number >= 1000 ? 2 : number >= 100 ? 2 : number >= 10 ? 3 : 4;
   return number.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
 function tickerPercent(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return "waiting";
+  const number = finiteNumber(value, null);
+  if (number === null) return "waiting";
   return `${number >= 0 ? "+" : ""}${number.toFixed(2)}%`;
 }
-
 function renderTicker(items = []) {
   latestMarketItems = items;
   const byId = new Map(items.map(item => [item.id, item]));
@@ -288,9 +293,9 @@ function renderTicker(items = []) {
   const sequence = Array.from({ length: repeats }, () => tickerDefinitions).flat();
   const cards = sequence.map(definition => {
     const item = byId.get(definition.id) || {};
-    const change = Number(item.change_percent);
-    const direction = Number.isFinite(change) ? (change > 0 ? "up" : change < 0 ? "down" : "flat") : "waiting";
-    const price = Number.isFinite(Number(item.price)) ? tickerNumber(item.price) : definition.fallback;
+    const change = finiteNumber(item.change_percent, null);
+    const direction = change !== null ? (change > 0 ? "up" : change < 0 ? "down" : "flat") : "waiting";
+    const price = finiteNumber(item.price, null) !== null ? tickerNumber(item.price) : definition.fallback;
     return `<article class="ticker-card ${direction}">
       <span class="ticker-dot" aria-hidden="true"></span>
       <span class="ticker-name">${escapeHtml(definition.label)}</span>
@@ -321,13 +326,42 @@ function mountChart(symbol = activeSymbol) {
     $("#marketChart").innerHTML = `<div class="widget-placeholder">${escapeHtml(meta.name)} chart paused for interface testing</div>`;
     return;
   }
-  mountWidget($("#marketChart"), "embed-widget-advanced-chart.js", {
-    autosize: true, width: "100%", height: "100%", symbol, interval: "15", timezone: "Asia/Singapore", theme: "dark",
+  if (meta.overview) {
+    mountWidget($("#marketChart"), "embed-widget-symbol-overview.js", {
+      autosize: true,
+      width: "100%",
+      height: "100%",
+      symbols: [[meta.name, `${symbol}|${meta.overviewInterval || "1D"}`]],
+      chartOnly: true,
+      locale: "en",
+      colorTheme: "dark",
+      isTransparent: true,
+      showVolume: false,
+      showMA: false,
+      hideDateRanges: false,
+      hideMarketStatus: false,
+      hideSymbolLogo: false,
+      scalePosition: "right",
+      scaleMode: "Normal",
+      fontFamily: "Inter, Arial, sans-serif",
+      fontSize: "10",
+      noTimeScale: false,
+      valuesTracking: "1",
+      changeMode: "price-and-percent",
+      dateRanges: ["1d|1", "1m|30", "3m|60", "12m|1D", "60m|1W"],
+      support_host: "https://www.tradingview.com"
+    }, "charts");
+    return;
+  }
+  const chartConfig = {
+    autosize: true, width: "100%", height: "100%", symbol, interval: meta.interval || "15", timezone: "Asia/Singapore", theme: "dark",
     style: "1", locale: "en", backgroundColor: "rgba(16, 23, 31, 1)",
     gridColor: "rgba(226, 232, 240, 0.055)", hide_top_toolbar: false,
     hide_side_toolbar: compactChart, hide_legend: false, withdateranges: true,
     allow_symbol_change: false, save_image: false, calendar: false, support_host: "https://www.tradingview.com"
-  }, "charts");
+  };
+  if (meta.range) chartConfig.range = meta.range;
+  mountWidget($("#marketChart"), "embed-widget-advanced-chart.js", chartConfig, "charts");
 }
 
 async function fetchJson(name) {
@@ -432,10 +466,10 @@ function statusFreshness(payload, sourceName, options = {}) {
   const contentAt = firstTimestamp(options.contentAt);
   const stampTarget = dataAt || generatedAt;
   const stamp = stampTarget ? `${sgtClock(stampTarget)} SGT` : "time unknown";
-  const badge = backup ? `${stale ? "STALE " : ""}SNAPSHOT · ${sgtClock(stampTarget)}` : (options.liveBadge || "LIVE DATA");
+  const badge = backup ? `${stale ? "STALE " : ""}SNAPSHOT - ${sgtClock(stampTarget)}` : (options.liveBadge || "LIVE DATA");
   const health = backup ? `Snap ${sgtClock(stampTarget)}` : (options.liveHealth || "Live");
   const contentNote = contentAt && options.contentLabel
-    ? ` · ${options.contentLabel} ${relativeTime(contentAt)}`
+    ? ` - ${options.contentLabel} ${relativeTime(contentAt)}`
     : "";
 
   let detail;
@@ -452,7 +486,7 @@ function statusFreshness(payload, sourceName, options = {}) {
   const summaryBits = [`${sourceName}: ${stale ? "stale " : ""}${stamp}`];
   if (contentAt && options.contentLabel) summaryBits.push(`${options.contentLabel} ${relativeTime(contentAt)}`);
   const footer = backup
-    ? `${stale ? "Stale snapshot" : "Snapshot"} from ${sgtStamp(stampTarget)}${generatedAt && generatedAt.getTime() !== stampTarget?.getTime() ? ` · GitHub checked ${sgtStamp(generatedAt)}` : ""}${contentNote}`
+    ? `${stale ? "Stale snapshot" : "Snapshot"} from ${sgtStamp(stampTarget)}${generatedAt && generatedAt.getTime() !== stampTarget?.getTime() ? ` - GitHub checked ${sgtStamp(generatedAt)}` : ""}${contentNote}`
     : `Live source updated ${sgtStamp(stampTarget)}${contentNote}`;
 
   return {
@@ -485,41 +519,41 @@ function eventDayLong(value) {
   const date = new Date(value);
   const relative = eventDay(value);
   const full = formatter(SINGAPORE_TZ, { weekday: "long", day: "2-digit", month: "short" }).format(date);
-  return relative === "Today" || relative === "Tomorrow" ? `${relative} · ${full}` : full;
+  return relative === "Today" || relative === "Tomorrow" ? `${relative} - ${full}` : full;
 }
 
 function sentiment(score) {
-  const value = Math.max(-1, Math.min(1, Number(score) || 0));
+  const value = Math.max(-1, Math.min(1, finiteNumber(score, 0)));
   if (value >= .18) return { key: "bullish", label: "Bullish", phrase: "leans bullish" };
   if (value <= -.18) return { key: "bearish", label: "Bearish", phrase: "leans bearish" };
   return { key: "balanced", label: "Balanced", phrase: "is balanced" };
 }
 
 function setNeedle(selector, score) {
-  $(selector).style.left = `${50 + Math.max(-1, Math.min(1, Number(score) || 0)) * 42}%`;
+  $(selector).style.left = `${50 + Math.max(-1, Math.min(1, finiteNumber(score, 0))) * 42}%`;
 }
 
 function formatMarketValue(item) {
-  const price = Number(item.price);
-  const change = Number(item.change_percent);
-  if (!Number.isFinite(price) || !Number.isFinite(change)) return "Live value unavailable";
+  const price = finiteNumber(item.price, null);
+  const change = finiteNumber(item.change_percent, null);
+  if (price === null || change === null) return "Live value unavailable";
   const decimals = price >= 100 ? 2 : price >= 10 ? 3 : 4;
-  return `${price.toLocaleString("en-US", { maximumFractionDigits: decimals })} · ${change >= 0 ? "+" : ""}${change.toFixed(2)}%`;
+  return `${price.toLocaleString("en-US", { maximumFractionDigits: decimals })} - ${change >= 0 ? "+" : ""}${change.toFixed(2)}%`;
 }
 
 function formatCorrelation(value) {
-  const number = Number(value);
-  return Number.isFinite(number) ? `${number >= 0 ? "+" : ""}${number.toFixed(2)}` : "n/a";
+  const number = finiteNumber(value, null);
+  return number !== null ? `${number >= 0 ? "+" : ""}${number.toFixed(2)}` : "n/a";
 }
 
 function correlationSummary(item) {
   if (item.id === "NDX") return "Primary Nasdaq momentum anchor";
+  const hasCorrelation = finiteNumber(item.correlation_60, null) !== null || finiteNumber(item.correlation_20, null) !== null;
+  if (!hasCorrelation) return "Correlation n/a";
   const strength = item.correlation_strength || "unavailable";
   const label = item.correlation_label || "correlation unavailable";
-  return `Corr: ${strength} · 60D ${formatCorrelation(item.correlation_60)} · 20D ${formatCorrelation(item.correlation_20)} · ${label}`;
-  return `${strength} ${label} · 60D ${formatCorrelation(item.correlation_60)} / 20D ${formatCorrelation(item.correlation_20)}`;
+  return `Corr: ${strength} - 60D ${formatCorrelation(item.correlation_60)} - 20D ${formatCorrelation(item.correlation_20)} - ${label}`;
 }
-
 function newsImpactLabel(item) {
   return `est. ${item.impact || "mixed"}`;
 }
@@ -528,10 +562,11 @@ function newsEstimateLine(item) {
   const confidence = item.confidence_label || "low";
   const reason = item.impact_reason || "headline language";
   const method = item.verified_article ? "article verified" : "headline estimate";
-  return `Estimated US100 impact · ${confidence} confidence · ${reason} · ${method}`;
+  return `Estimated NASDAQ impact - ${confidence} confidence - ${reason} - ${method}`;
 }
 
 function marketEffect(item) {
+  if (finiteNumber(item.nasdaq_score, null) === null) return "Effect unavailable";
   const read = sentiment(item.nasdaq_score);
   if (item.id === "US10Y") {
     if (read.key === "bullish") return "Rate relief";
@@ -561,6 +596,14 @@ function marketEffect(item) {
   return read.label;
 }
 
+function normalizeMarketItem(item = {}) {
+  const normalized = { ...item };
+  ["price", "change_percent", "nasdaq_score", "correlation_20", "correlation_60", "effective_relation", "assumed_relation"].forEach(key => {
+    normalized[key] = finiteNumber(normalized[key], null);
+  });
+  return normalized;
+}
+
 function renderMarket(payload) {
   if (!payload.ok || !payload.items?.length || !payload.pulse) {
     latestMarketItems = [];
@@ -585,7 +628,8 @@ function renderMarket(payload) {
 
   const backup = Boolean(payload.stale || payload.static_snapshot);
   const freshness = statusFreshness(payload, "Markets", { liveBadge: "LIVE DATA", maxAgeMinutes: 20 });
-  renderTicker(payload.items);
+  const marketItems = payload.items.map(normalizeMarketItem);
+  renderTicker(marketItems);
   latestMarketPulse = { ...payload.pulse, backup, freshness };
   setHealth("market", backup ? "delayed" : "live", freshness.health, freshness);
   const status = $("#marketPulseStatus");
@@ -594,9 +638,9 @@ function renderMarket(payload) {
   status.title = freshness.detail;
   setNeedle("#marketPulseNeedle", payload.pulse.score);
   $("#marketPulseTitle").textContent = payload.pulse.title || `Cross-market context ${sentiment(payload.pulse.score).phrase}`;
-  $("#marketPulseSummary").textContent = payload.pulse.summary || "Weighted from US100/NDX momentum, US500/US30 confirmation, U.S. yields, VXN, semiconductors and the dollar.";
+  $("#marketPulseSummary").textContent = payload.pulse.summary || "Weighted from NASDAQ/NDX momentum, US500/US30 confirmation, U.S. yields, VXN, semiconductors and the dollar.";
 
-  payload.items.forEach(item => {
+  marketItems.forEach(item => {
     const card = $(`[data-driver="${item.id}"]`);
     if (!card) return;
     let metric = card.querySelector(".driver-market-read");
@@ -652,9 +696,9 @@ function renderTotalPulse() {
   status.textContent = partial ? "PARTIAL / SNAPSHOT" : "LIVE COMBINED";
   status.title = [latestMarketPulse?.freshness?.detail, latestNewsPulse?.freshness?.detail].filter(Boolean).join(" - ");
   setNeedle("#totalPulseNeedle", score);
-  $("#totalPulseTitle").textContent = `Total US100 context ${read.phrase}`;
+  $("#totalPulseTitle").textContent = `Total NASDAQ context ${read.phrase}`;
   const eventLine = latestResult
-    ? `Latest result: ${latestResult.title} actual ${latestResult.actual || "released"}${latestResult.forecast ? ` vs forecast ${latestResult.forecast}` : ""} ? ${latestResult.result_bias} for US100 (${latestResult.result_reason}).`
+    ? `Latest result: ${latestResult.title} actual ${latestResult.actual || "released"}${latestResult.forecast ? ` vs forecast ${latestResult.forecast}` : ""} ? ${latestResult.result_bias} for NASDAQ (${latestResult.result_reason}).`
     : highImpact
       ? `${highImpact} important USD event${highImpact === 1 ? " is" : "s are"} on watch; a fresh result can quickly invalidate the current read.`
       : "No listed high-impact USD event is currently adding event-result pressure.";
@@ -673,7 +717,7 @@ function renderCalendar(payload) {
       status.textContent = "LIVE WIDGET";
       status.title = "Parsed calendar feed is unavailable; TradingView calendar widget is loaded temporarily.";
       setHealth("calendar", "delayed", "Widget", { summary: "Calendar: live widget", detail: status.title });
-      $("#calendarFreshnessNote").textContent = "Live backup widget · USD high/medium impact";
+      $("#calendarFreshnessNote").textContent = "Live backup widget - USD high/medium impact";
       mountWidget($("#calendarList"), "embed-widget-events.js", {
         colorTheme: "dark", isTransparent: true, width: "100%", height: 385,
         locale: "en", importanceFilter: "0,1", countryFilter: "us"
@@ -697,7 +741,7 @@ function renderCalendar(payload) {
   status.textContent = freshness.badge;
   status.title = freshness.detail;
   setHealth("calendar", backup ? "delayed" : "live", freshness.health, freshness);
-  $("#calendarFreshnessNote").textContent = `${freshness.footer} · USD high/medium impact`;
+  $("#calendarFreshnessNote").textContent = `${freshness.footer} - USD high/medium impact`;
   const groups = new Map();
   payload.events.slice(0, 12).forEach(event => {
     const key = event.time_utc
@@ -715,8 +759,8 @@ function renderCalendar(payload) {
       const values = [event.actual && `Actual ${event.actual}`, event.forecast && `Fcst ${event.forecast}`, event.previous && `Prev ${event.previous}`].filter(Boolean).join(" - ") || "Details pending";
       const bias = event.result_bias || "pending";
       const resultLine = event.result_status === "released"
-        ? `<p class="calendar-result ${escapeHtml(bias)}">US100 result read: ${escapeHtml(bias)} - ${escapeHtml(event.result_reason || "actual result released")}</p>`
-        : `<p class="calendar-reason">US100 watch: ${escapeHtml(event.nasdaq_relevance || "Watch")} - ${escapeHtml(event.nasdaq_reason || "USD event risk")}</p>`;
+        ? `<p class="calendar-result ${escapeHtml(bias)}">NASDAQ result read: ${escapeHtml(bias)} - ${escapeHtml(event.result_reason || "actual result released")}</p>`
+        : `<p class="calendar-reason">NASDAQ watch: ${escapeHtml(event.nasdaq_relevance || "Watch")} - ${escapeHtml(event.nasdaq_reason || "USD event risk")}</p>`;
       return `<article class="calendar-item">
         <div class="calendar-time"><strong>${escapeHtml(time)}</strong><small>SGT</small></div>
         <div class="calendar-copy"><h3>${escapeHtml(event.title)}</h3><p>USD - ${escapeHtml(values)}</p>${resultLine}</div>
@@ -737,7 +781,7 @@ function renderNews(payload) {
       status.textContent = "LIVE WIDGET";
       status.title = "Parsed headline feed is unavailable; a live TradingView headline widget is loaded temporarily.";
       setHealth("news", "delayed", "Widget", { summary: "News: live widget", detail: status.title });
-      $("#newsFreshnessNote").textContent = "Live backup widget · source attribution shown per story";
+      $("#newsFreshnessNote").textContent = "Live backup widget - source attribution shown per story";
       mountWidget($("#newsList"), "embed-widget-timeline.js", {
         feedMode: "symbol", symbol: "CAPITALCOM:US100", colorTheme: "dark",
         isTransparent: true, displayMode: "regular", width: "100%", height: 385, locale: "en"
@@ -764,15 +808,15 @@ function renderNews(payload) {
   status.textContent = freshness.badge;
   status.title = freshness.detail;
   setHealth("news", backup ? "delayed" : "live", freshness.health, freshness);
-  $("#newsFreshnessNote").textContent = `${freshness.footer} · source attribution shown per story`;
+  $("#newsFreshnessNote").textContent = `${freshness.footer} - source attribution shown per story`;
   $("#newsList").innerHTML = payload.items.slice(0, 18).map(item => `<a class="news-item" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">
     <span class="news-effect ${escapeHtml(item.impact)}">${escapeHtml(item.impact || "mixed")}</span>
-    <span class="news-copy"><h3>${escapeHtml(item.title)}</h3><p><span>${escapeHtml(item.source || "FXStreet")}</span><span>·</span><span>${escapeHtml(relativeTime(item.published))}</span></p></span>
+    <span class="news-copy"><h3>${escapeHtml(item.title)}</h3><p><span>${escapeHtml(item.source || "FXStreet")}</span><span>-</span><span>${escapeHtml(relativeTime(item.published))}</span></p></span>
   </a>`).join("");
-  $("#newsFreshnessNote").textContent = `${freshness.footer} · US100 impact is estimated from headline text and source context, not full-article verification`;
+  $("#newsFreshnessNote").textContent = `${freshness.footer} - NASDAQ impact is estimated from headline text and source context, not full-article verification`;
   $("#newsList").innerHTML = payload.items.slice(0, 18).map(item => `<a class="news-item" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">
     <span class="news-effect ${escapeHtml(item.impact)}"><small>EST.</small>${escapeHtml(item.impact || "mixed")}</span>
-    <span class="news-copy"><h3>${escapeHtml(item.title)}</h3><p><span>${escapeHtml(item.source || "FXStreet")}</span><span>·</span><span>${escapeHtml(relativeTime(item.published))}</span></p><p class="news-estimate">${escapeHtml(newsEstimateLine(item))}</p></span>
+    <span class="news-copy"><h3>${escapeHtml(item.title)}</h3><p><span>${escapeHtml(item.source || "FXStreet")}</span><span>-</span><span>${escapeHtml(relativeTime(item.published))}</span></p><p class="news-estimate">${escapeHtml(newsEstimateLine(item))}</p></span>
   </a>`).join("");
   renderPulse(payload.pulse, backup, freshness);
   return true;
@@ -836,7 +880,7 @@ function renderPulse(pulse, backup = false, freshness = null) {
   const score = Math.max(-1, Math.min(1, Number(pulse.score) || 0));
   latestNewsPulse = { ...pulse, score, backup, freshness };
   status.className = `source-status ${backup ? "delayed" : "live"}`;
-  status.textContent = backup && freshness ? `${freshness.badge} · ${pulse.sample_size || 0}` : `${pulse.sample_size || 0} HEADLINES`;
+  status.textContent = backup && freshness ? `${freshness.badge} - ${pulse.sample_size || 0}` : `${pulse.sample_size || 0} HEADLINES`;
   status.title = freshness?.detail || "";
   $("#pulseNeedle").style.left = `${50 + score * 42}%`;
   $("#pulseTitle").textContent = pulse.title || "Balanced narrative";

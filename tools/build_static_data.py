@@ -197,7 +197,7 @@ def main() -> None:
         "companies": snapshot("companies", server.load_companies, read_previous(output, "companies")),
     }
     for name, payload in feeds.items():
-        (output / f"{name}.json").write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        (output / f"{name}.json").write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":"), allow_nan=False), encoding="utf-8")
     generated_at = datetime.now(timezone.utc).isoformat()
     status = {
         "ok": any(payload.get("ok") for payload in feeds.values()),
@@ -206,7 +206,7 @@ def main() -> None:
         "snapshot_generated_at": generated_at,
         "feeds": {name: feed_status(name, payload) for name, payload in feeds.items()},
     }
-    (output / "status.json").write_text(json.dumps(status, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    (output / "status.json").write_text(json.dumps(status, ensure_ascii=False, separators=(",", ":"), allow_nan=False), encoding="utf-8")
 
 
 if __name__ == "__main__":

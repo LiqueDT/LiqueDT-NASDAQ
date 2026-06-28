@@ -257,18 +257,39 @@ def correlation_note(series: dict[str, Any], corr_20: float | None, corr_60: flo
     return f"{medium}, {short}; {regime}"
 
 
-def load_daily_closes_yahoo(ticker: str) -> list[float]:
+def load_daily_history_yahoo(ticker: str) -> list[dict[str, Any]]:
     encoded = urllib.parse.quote(ticker, safe="")
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{encoded}?interval=1d&range=6mo"
     payload = json.loads(fetch_bytes(url).decode("utf-8"))
     result = payload["chart"]["result"][0]
     closes = result["indicators"]["quote"][0]["close"]
-    output: list[float] = []
-    for value in closes:
+    timestamps = result.get("timestamp") or []
+    output: list[dict[str, Any]] = []
+    total = len(closes)
+    for index, value in enumerate(closes):
         number = finite_float(value)
-        if number is not None:
-            output.append(number)
+        if number is None:
+            continue
+        stamp = timestamps[index] if index < len(timestamps) else None
+        if stamp:
+            date = datetime.fromtimestamp(float(stamp), timezone.utc).date().isoformat()
+        else:
+            date = (datetime.now(timezone.utc).date() - timedelta(days=max(0, total - index - 1))).isoformat()
+        output.append({"date": date, "value": round(number, 5)})
     return output
+
+
+def history_values(history: list[dict[str, Any]]) -> list[float]:
+    values: list[float] = []
+    for point in history:
+        number = finite_float(point.get("value"))
+        if number is not None:
+            values.append(number)
+    return values
+
+
+def load_daily_closes_yahoo(ticker: str) -> list[float]:
+    return history_values(load_daily_history_yahoo(ticker))
 
 
 def contains_term(value: str, term: str) -> bool:
@@ -505,6 +526,7 @@ def load_companies() -> dict[str, Any]:
     return {
         "ok": True,
         "source": "Official Nasdaq quote list-type/nasdaq100 endpoint",
+        "source_url": NASDAQ100_URL,
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "as_of": data.get("date"),
         "total_records": data.get("totalrecords") or len(items),
@@ -515,13 +537,13 @@ def load_market() -> dict[str, Any]:
     items: list[dict[str, Any]] = []
     weighted_score = 0.0
     total_weight = 0.0
-    histories: dict[str, list[float]] = {}
+    histories: dict[str, list[dict[str, Any]]] = {}
     for series in MARKET_SERIES:
         try:
-            histories[str(series["ticker"])] = load_daily_closes_yahoo(str(series["ticker"]))
+            histories[str(series["ticker"])] = load_daily_history_yahoo(str(series["ticker"]))
         except (KeyError, TypeError, ValueError, UnicodeDecodeError, json.JSONDecodeError, OSError, urllib.error.URLError):
             continue
-    primary_history = histories.get("^NDX", [])
+    primary_history = history_values(histories.get("^NDX", []))
 
     for series in MARKET_SERIES:
         ticker = urllib.parse.quote(str(series["ticker"]), safe="")
@@ -538,7 +560,8 @@ def load_market() -> dict[str, Any]:
             if not math.isfinite(change_percent):
                 continue
             normalized_move = max(-1.0, min(1.0, change_percent / float(series["move_scale"])))
-            series_history = histories.get(str(series["ticker"]), [])
+            series_history_points = histories.get(str(series["ticker"]), [])
+            series_history = history_values(series_history_points)
             if series["id"] == "NDX":
                 corr_20, corr_60 = 1.0, 1.0
             else:
@@ -565,6 +588,7 @@ def load_market() -> dict[str, Any]:
                 "relation_source": "rolling_60d_correlation" if corr_60 is not None and series["id"] != "NDX" else "primary_or_macro_fallback",
                 "data_proxy": False,
                 "proxy_note": "",
+                "history": series_history_points[-126:],
             })
         except (KeyError, TypeError, ValueError, UnicodeDecodeError, json.JSONDecodeError, OSError, urllib.error.URLError):
             continue

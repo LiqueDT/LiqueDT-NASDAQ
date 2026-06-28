@@ -10,17 +10,17 @@
   <meta name="description" content="LiqueDT is a live NASDAQ market context companion for sessions, related markets, economic events and news.">
   <title>LiqueDT &mdash; NASDAQ market context</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="favicon-32.png?v=1.0.6" type="image/png" sizes="32x32">
-  <link rel="shortcut icon" href="favicon.ico?v=1.0.6" type="image/x-icon">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1.0.6">
-  <link rel="stylesheet" href="styles.css?v=1.0.6">
+  <link rel="icon" href="favicon-32.png?v=1.0.14" type="image/png" sizes="32x32">
+  <link rel="shortcut icon" href="favicon.ico?v=1.0.14" type="image/x-icon">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1.0.14">
+  <link rel="stylesheet" href="styles.css?v=1.0.14">
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to market overview</a>
 
   <header class="app-header">
     <a class="brand" href="#overview" aria-label="LiqueDT home">
-      <img src="icon.svg?v=1.0.6" alt="" width="40" height="40">
+      <img src="icon.svg?v=1.0.14" alt="" width="40" height="40">
       <span><strong>LiqueDT<span>.</span></strong><small>NASDAQ CONTEXT</small></span>
     </a>
 
@@ -56,8 +56,8 @@
     </div>
     <div class="health-item"><span>Markets</span><strong id="marketHealth" class="checking">Checking</strong></div>
     <div class="health-item"><span>Charts</span><strong id="chartsHealth" class="checking">Checking</strong></div>
-    <div class="health-item"><span>News</span><strong id="newsHealth" class="checking">Checking</strong></div>
     <div class="health-item"><span>Calendar</span><strong id="calendarHealth" class="checking">Checking</strong></div>
+    <div class="health-item"><span>News</span><strong id="newsHealth" class="checking">Checking</strong></div>
     <div class="health-item last-check"><span>Last checked</span><strong id="lastChecked">&mdash;</strong></div>
     <button id="refreshData" class="quiet-button" type="button" aria-label="Refresh all market data">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5M4 13a8.1 8.1 0 0 0 15.5 2m.5 5v-5h-5"/></svg>
@@ -241,6 +241,7 @@
         <div id="companiesList" class="companies-list" aria-live="polite">
           <div class="loading-row"><span></span><p>Loading Nasdaq-100 constituents...</p></div>
         </div>
+        <div class="panel-footer companies-footer"><span>Source: Official Nasdaq-100 constituent page</span><a href="https://www.nasdaq.com/market-activity/quotes/nasdaq-ndx-index" target="_blank" rel="noreferrer">Full Nasdaq-100 list &nearr;</a></div>
       </article>
     </section>
 
@@ -280,14 +281,14 @@
   </main>
 
   <footer>
-    <a class="brand footer-brand" href="#overview"><img src="icon.svg?v=1.0.6" alt="" width="32" height="32"><strong>LiqueDT<span>.</span></strong></a>
+    <a class="brand footer-brand" href="#overview"><img src="icon.svg?v=1.0.14" alt="" width="32" height="32"><strong>LiqueDT<span>.</span></strong></a>
     <p>Liquidity context for NASDAQ &middot; Singapore time everywhere</p>
     <p>Market hours are indicative and can vary by broker and holiday.</p>
   </footer>
 
   <dialog id="methodDialog">
     <form method="dialog">
-      <button class="dialog-close" aria-label="Close">ÃƒÆ’Ã¢â‚¬â€</button>
+      <button class="dialog-close" type="button" data-close-dialog="methodDialog" aria-label="Close">&times;</button>
       <p class="eyebrow">METHODOLOGY</p>
       <h2>A narrative compass, not a forecast.</h2>
       <p>LiqueDT scans recent NASDAQ-sensitive headlines for language around rates, AI/semiconductors, mega-cap earnings, volatility and risk. It assigns a small estimated directional weight, reason and confidence, then aggregates the result into bearish, balanced or bullish narrative context.</p>
@@ -298,7 +299,7 @@
 
   <dialog id="feedbackDialog">
     <form id="feedbackForm" action="https://formsubmit.co/LiqueDT@gmail.com" method="POST">
-      <button class="dialog-close" type="button" data-close-dialog="feedbackDialog" aria-label="Close">ÃƒÆ’Ã¢â‚¬â€</button>
+      <button class="dialog-close" type="button" data-close-dialog="feedbackDialog" aria-label="Close">&times;</button>
       <p class="eyebrow">CONTACT LIQUEDT</p>
       <h2>Review, suggestion or report.</h2>
       <label class="form-field">Category
@@ -316,6 +317,6 @@
   </dialog>
 
   <noscript><div class="noscript">LiqueDT needs JavaScript for live clocks, data and charts.</div></noscript>
-  <script src="app.js?v=1.0.6" defer></script>
+  <script src="app.js?v=1.0.14" defer></script>
 </body>
 </html>

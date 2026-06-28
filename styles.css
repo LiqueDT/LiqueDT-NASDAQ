@@ -234,6 +234,7 @@ main, footer { width: min(calc(100% - 48px), var(--max)); margin-inline: auto; }
 .company-meta span { padding: 4px 6px; color: var(--muted); background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.045); border-radius: 6px; font: 500 7px/1 var(--mono); }
 .company-card.up .company-meta span:nth-child(2) { color: var(--acid); }
 .company-card.down .company-meta span:nth-child(2) { color: var(--red); }
+.companies-footer { margin-top: 0; padding: 14px 20px; background: var(--ink-2); }
 
 .intel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; border-top: 1px solid var(--line); }
 .calendar-section { grid-template-columns: 1fr; }

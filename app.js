@@ -18,10 +18,10 @@ const widgetSymbols = {
   "CAPITALCOM:US100": { name: "NAS100 / Nasdaq 100 Cash CFD", tag: "PRIMARY NAS100 CASH CFD" },
   "CAPITALCOM:US500": { name: "US500 / S&P 500 Cash CFD", tag: "US500 / BROAD RISK CONFIRMATION" },
   "CAPITALCOM:US30": { name: "US30 / Dow Cash CFD", tag: "US30 / BROADER SENTIMENT" },
-  "TVC:US10Y": { name: "U.S. 10Y Treasury Yield", tag: "DURATION / RATES", interval: "D", overviewInterval: "1D", range: "12M", overview: true },
-  "CBOE:VXN": { name: "Nasdaq-100 Volatility Index", tag: "NASDAQ-SPECIFIC FEAR", interval: "D", overviewInterval: "1D", range: "12M", overview: true },
-  "NASDAQ:SOX": { name: "PHLX Semiconductor Index", tag: "CHIP / AI LEADERSHIP", interval: "D", overviewInterval: "1D", range: "12M", overview: true },
-  "TVC:DXY": { name: "U.S. Dollar Index", tag: "GLOBAL FX CONDITIONS", interval: "D", overviewInterval: "1D", range: "12M", overview: true }
+  "TVC:US10Y": { name: "U.S. 10Y Treasury Yield", tag: "DURATION / RATES · TV CHART USB10YUSD PROXY", interval: "D", range: "12M", chartSymbol: "OANDA:USB10YUSD" },
+  "CBOE:VXN": { name: "Nasdaq-100 Volatility Index", tag: "NASDAQ-SPECIFIC FEAR · TV CHART VIXY", interval: "D", range: "12M", chartSymbol: "CBOE:VIXY" },
+  "NASDAQ:SOX": { name: "PHLX Semiconductor Index", tag: "CHIP / AI LEADERSHIP · TV CHART SOXX", interval: "D", range: "12M", chartSymbol: "NASDAQ:SOXX" },
+  "TVC:DXY": { name: "U.S. Dollar Index", tag: "GLOBAL FX CONDITIONS · TV CHART CAPITALCOM:DXY", interval: "D", range: "12M", chartSymbol: "CAPITALCOM:DXY" }
 };
 
 const tickerDefinitions = [
@@ -39,14 +39,15 @@ let latestRefresh = null;
 let latestMarketPulse = null;
 let latestMarketItems = [];
 let tickerResizeTimer = null;
+let latestCompanies = [];
 let latestNewsPulse = null;
 let latestCalendar = null;
 let latestCalendarPulse = null;
 let latestStaticBuild = null;
 const WIDGETS_DISABLED = new URLSearchParams(location.search).has("no-widgets");
-const healthState = { market: "checking", charts: "checking", news: "checking", calendar: "checking" };
-const healthMeta = { market: null, charts: null, news: null, calendar: null };
-const healthLabels = { market: "Markets", charts: "Charts", news: "News", calendar: "Calendar" };
+const healthState = { market: "checking", charts: "checking", calendar: "checking", news: "checking" };
+const healthMeta = { market: null, charts: null, calendar: null, news: null };
+const healthLabels = { market: "Markets", charts: "Charts", calendar: "Calendar", news: "News" };
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -326,35 +327,8 @@ function mountChart(symbol = activeSymbol) {
     $("#marketChart").innerHTML = `<div class="widget-placeholder">${escapeHtml(meta.name)} chart paused for interface testing</div>`;
     return;
   }
-  if (meta.overview) {
-    mountWidget($("#marketChart"), "embed-widget-symbol-overview.js", {
-      autosize: true,
-      width: "100%",
-      height: "100%",
-      symbols: [[meta.name, `${symbol}|${meta.overviewInterval || "1D"}`]],
-      chartOnly: true,
-      locale: "en",
-      colorTheme: "dark",
-      isTransparent: true,
-      showVolume: false,
-      showMA: false,
-      hideDateRanges: false,
-      hideMarketStatus: false,
-      hideSymbolLogo: false,
-      scalePosition: "right",
-      scaleMode: "Normal",
-      fontFamily: "Inter, Arial, sans-serif",
-      fontSize: "10",
-      noTimeScale: false,
-      valuesTracking: "1",
-      changeMode: "price-and-percent",
-      dateRanges: ["1d|1", "1m|30", "3m|60", "12m|1D", "60m|1W"],
-      support_host: "https://www.tradingview.com"
-    }, "charts");
-    return;
-  }
   const chartConfig = {
-    autosize: true, width: "100%", height: "100%", symbol, interval: meta.interval || "15", timezone: "Asia/Singapore", theme: "dark",
+    autosize: true, width: "100%", height: "100%", symbol: meta.chartSymbol || symbol, interval: meta.interval || "15", timezone: "Asia/Singapore", theme: "dark",
     style: "1", locale: "en", backgroundColor: "rgba(16, 23, 31, 1)",
     gridColor: "rgba(226, 232, 240, 0.055)", hide_top_toolbar: false,
     hide_side_toolbar: compactChart, hide_legend: false, withdateranges: true,
@@ -365,7 +339,7 @@ function mountChart(symbol = activeSymbol) {
 }
 
 async function fetchJson(name) {
-  const candidates = [`api/${name}`, `data/${name}.json`];
+  const candidates = name === "companies" ? [`data/${name}.json`, `api/${name}`] : [`api/${name}`, `data/${name}.json`];
   let lastError = new Error("No data source responded");
   for (const path of candidates) {
     const controller = new AbortController();
@@ -451,6 +425,21 @@ function sgtStamp(value) {
   if (!date) return "time unknown";
   const day = formatter(SINGAPORE_TZ, { weekday: "short", day: "2-digit", month: "short" }).format(date);
   return `${day} ${sgtClock(date)} SGT`;
+}
+
+
+function sourceDateLabel(value) {
+  if (!value) return "";
+  const text = String(value).trim();
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+  const named = text.match(/^([A-Za-z]{3,9})\s+(\d{1,2}),\s*(\d{4})$/);
+  if (named) {
+    const months = { jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06", jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12" };
+    const month = months[named[1].slice(0, 3).toLowerCase()];
+    if (month) return `${named[2].padStart(2, "0")}/${month}/${named[3]}`;
+  }
+  return text;
 }
 
 function olderThan(value, minutes) {
@@ -554,6 +543,7 @@ function correlationSummary(item) {
   const label = item.correlation_label || "correlation unavailable";
   return `Corr: ${strength} - 60D ${formatCorrelation(item.correlation_60)} - 20D ${formatCorrelation(item.correlation_20)} - ${label}`;
 }
+
 function newsImpactLabel(item) {
   return `est. ${item.impact || "mixed"}`;
 }
@@ -855,12 +845,19 @@ function renderCompanies(payload) {
   latestCompanies = payload.items;
   const backup = Boolean(payload.stale || payload.static_snapshot);
   const freshness = statusFreshness(payload, "Companies", { liveBadge: "NASDAQ LIVE", maxAgeMinutes: 1440 });
+  const sourceDate = sourceDateLabel(payload.as_of);
+  const checkedAt = firstTimestamp(payload.snapshot_generated_at, payload.snapshot_attempted_at, payload.updated_at);
+  const checkedLabel = checkedAt ? ` - app checked ${sgtStamp(checkedAt)}` : "";
   status.className = `source-status ${backup ? "delayed" : "live"}`;
-  status.textContent = backup ? freshness.badge : "NASDAQ LIVE";
-  status.title = freshness.detail;
+  status.textContent = sourceDate ? `AS OF ${sourceDate}` : (backup ? freshness.badge : "NASDAQ LIVE");
+  status.title = sourceDate
+    ? `${payload.source || "Official Nasdaq source"} list date ${sourceDate}.${checkedAt ? ` App snapshot checked ${sgtStamp(checkedAt)}.` : ""} If Nasdaq updates the source date, the next app/GitHub refresh will display the new date.`
+    : freshness.detail;
   const officialCount = payload.total_records || payload.items.length;
   $("#companiesCount").textContent = `${payload.items.length} shown`;
-  $("#companiesFreshnessNote").textContent = `Official Nasdaq list ${payload.as_of ? `as of ${payload.as_of}` : freshness.footer} - ${officialCount} listings`;
+  $("#companiesFreshnessNote").textContent = sourceDate
+    ? `Official Nasdaq list date ${sourceDate} - ${officialCount} listings${checkedLabel}`
+    : `Official Nasdaq list ${freshness.footer} - ${officialCount} listings`;
   renderCompanyCards(payload.items);
   return true;
 }

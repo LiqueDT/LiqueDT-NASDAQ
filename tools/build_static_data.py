@@ -173,6 +173,10 @@ def feed_status(name: str, payload: dict) -> dict:
         "warning": payload.get("warning"),
         "error": payload.get("error") or payload.get("snapshot_error"),
     }
+    if payload.get("as_of"):
+        status["source_as_of"] = payload.get("as_of")
+    if payload.get("source_url"):
+        status["source_url"] = payload.get("source_url")
     if isinstance(payload.get("items"), list):
         status["item_count"] = len(payload["items"])
         if payload["items"]:

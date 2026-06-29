@@ -430,10 +430,15 @@ dialog p:not(.eyebrow) { color: #aab5c1; font-size: 11px; line-height: 1.75; }
   .driver-stack { grid-template-columns: 1fr; }
   .market-layout, .chart-card, .driver-stack, .driver-card, .companies-section, .companies-panel, .intel-grid, .intel-panel, .calendar-section, .news-section { width: 100%; min-width: 0; max-width: 100%; }
   .companies-toolbar { align-items: flex-start; flex-direction: column; }
-  .companies-actions { width: 100%; }
-  .companies-actions input { width: 100%; min-width: 0; }
-  .companies-list { grid-template-columns: 1fr; max-height: 620px; }
-  .company-card { padding: 14px; }
+  .companies-actions { width: 100%; flex-wrap: wrap; }
+  .companies-actions input { width: 100%; min-width: 0; flex: 1 1 100%; }
+  .companies-actions .source-status { max-width: 100%; white-space: normal; text-overflow: clip; }
+  .companies-list { grid-template-columns: 1fr; max-height: 224px; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+  .company-card { padding: 8px 10px; gap: 5px 7px; }
+  .company-main strong { font-size: 11px; }
+  .company-main span { min-height: 0; font-size: 7.5px; line-height: 1.22; }
+  .company-meta { gap: 4px; }
+  .company-meta span { padding: 2px 5px; font-size: 6px; }
 
   .driver-card { min-height: 185px; overflow: hidden; }
   .driver-card > div { min-width: 0; gap: 12px; }

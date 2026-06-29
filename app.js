@@ -5,17 +5,24 @@ const $$ = selector => [...document.querySelectorAll(selector)];
 const SINGAPORE_TZ = "Asia/Singapore";
 const formatterCache = new Map();
 
-const sessions = [
-  { id: "asia", label: "Asia / overnight", note: "Futures and overnight sentiment; usually slower for NAS100.cash", anchorTimeZone: "Asia/Singapore", open: { timeZone: "Asia/Singapore", hour: 8, minute: 0 }, close: { timeZone: "Asia/Singapore", hour: 16, minute: 0 } },
-  { id: "london", label: "Europe pre-market", note: "Europe flow before Nasdaq cash open; direction can start building", anchorTimeZone: "America/New_York", requiresCashDay: true, open: { timeZone: "Europe/London", hour: 8, minute: 0 }, close: { timeZone: "America/New_York", hour: 9, minute: 30 } },
-  { id: "new-york", label: "U.S. cash session", note: "Main NASDAQ liquidity window; first 15-30 min can fake out", anchorTimeZone: "America/New_York", requiresCashDay: true, cashSession: true, open: { timeZone: "America/New_York", hour: 9, minute: 30 }, close: { cashClose: true } }
+const SESSION_TZ = SINGAPORE_TZ;
+const MARKET_TZ = "America/New_York";
+
+const mainSessions = [
+  { id: "asia-overnight", label: "Asia / overnight", note: "Range building, slower movement", tone: "range", kind: "main" },
+  { id: "europe-pre-market", label: "Europe pre-market", note: "Bias starts forming before U.S. cash open", tone: "bias", kind: "main" },
+  { id: "us-cash-session", label: "U.S. cash session", note: "Main NASDAQ liquidity", tone: "main", kind: "main" }
 ];
 
-const nasdaqClosedDates = new Set(["2026-01-01", "2026-01-19", "2026-02-16", "2026-04-03", "2026-05-25", "2026-06-19", "2026-07-03", "2026-09-07", "2026-11-26", "2026-12-25"]);
-const nasdaqEarlyCloses = new Map([["2026-11-27", { hour: 13, minute: 0 }], ["2026-12-24", { hour: 13, minute: 0 }]]);
+const statusWindows = [
+  { id: "after-hours", label: "After-hours", note: "Low liquidity", tone: "low", kind: "status" },
+  { id: "daily-pause", label: "Daily pause", note: "Market paused", tone: "avoid", kind: "status" },
+  { id: "early-cfd-reopen", label: "Early CFD reopen", note: "Observe", tone: "observe", kind: "status" }
+];
 
+const sessions = [...mainSessions, ...statusWindows];
 const widgetSymbols = {
-  "CAPITALCOM:US100": { name: "NAS100 / Nasdaq 100 Cash CFD", tag: "PRIMARY NAS100 CASH CFD" },
+  "CAPITALCOM:US100": { name: "NAS100 / Nasdaq 100 Spot CFD", tag: "PRIMARY NAS100 SPOT CFD" },
   "CAPITALCOM:US500": { name: "US500 / S&P 500 Cash CFD", tag: "US500 / BROAD RISK CONFIRMATION" },
   "CAPITALCOM:US30": { name: "US30 / Dow Cash CFD", tag: "US30 / BROADER SENTIMENT" },
   "TVC:US10Y": { name: "U.S. 10Y Treasury Yield", tag: "DURATION / RATES · TV CHART USB10YUSD PROXY", interval: "D", range: "12M", chartSymbol: "OANDA:USB10YUSD" },
@@ -106,94 +113,215 @@ function countdown(milliseconds) {
   return days ? `${days}d ${clock}` : clock;
 }
 
+function sgtHourMinute(date) {
+  return formatter(SESSION_TZ, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(date);
+}
+
+function sgtDayHourMinute(date) {
+  return formatter(SESSION_TZ, { weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(date);
+}
+
 function ymd(parts) {
   return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
 }
 
-function isNasdaqCashDay(parts) {
-  const weekday = calendarDate(parts).weekday;
-  return weekday >= 1 && weekday <= 5 && !nasdaqClosedDates.has(ymd(parts));
+function nthWeekdayOfMonth(year, month, weekday, n) {
+  const first = calendarDate({ year, month, day: 1 });
+  const offset = (weekday - first.weekday + 7) % 7;
+  return calendarDate({ year, month, day: 1 + offset + (n - 1) * 7 });
 }
 
-function nasdaqCashCloseFor(parts) {
-  return nasdaqEarlyCloses.get(ymd(parts)) || { hour: 16, minute: 0 };
+function lastWeekdayOfMonth(year, month, weekday) {
+  const last = calendarDate({ year, month: month + 1, day: 0 });
+  const offset = (last.weekday - weekday + 7) % 7;
+  return calendarDate(last, -offset);
 }
 
-function sessionEndpointTime(config, side, candidate) {
-  const endpoint = side === "close" && config.close.cashClose ? nasdaqCashCloseFor(candidate) : config[side];
-  return zonedDateTimeToUtc(candidate.year, candidate.month, candidate.day, endpoint.hour, endpoint.minute || 0, endpoint.timeZone || "America/New_York");
+function observedFixedHoliday(year, month, day) {
+  const holiday = calendarDate({ year, month, day });
+  if (holiday.weekday === 6) return calendarDate(holiday, -1);
+  if (holiday.weekday === 0) return calendarDate(holiday, 1);
+  return holiday;
 }
 
-function sessionWindow(now, config, offset) {
-  const anchorParts = zonedParts(now, config.anchorTimeZone || config.open.timeZone);
-  const candidate = calendarDate(anchorParts, offset);
-  const openTime = sessionEndpointTime(config, "open", candidate);
-  let closeTime = sessionEndpointTime(config, "close", candidate);
-  if (closeTime <= openTime) {
-    const nextDay = calendarDate(candidate, 1);
-    closeTime = sessionEndpointTime(config, "close", nextDay);
+function easterSunday(year) {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return calendarDate({ year, month, day });
+}
+
+const nasdaqHolidayCache = new Map();
+
+function nasdaqHolidayKeysForYear(year) {
+  if (nasdaqHolidayCache.has(year)) return nasdaqHolidayCache.get(year);
+  const keys = new Set();
+  const add = parts => keys.add(ymd(parts));
+  add(observedFixedHoliday(year, 1, 1));
+  add(nthWeekdayOfMonth(year, 1, 1, 3));
+  add(nthWeekdayOfMonth(year, 2, 1, 3));
+  add(calendarDate(easterSunday(year), -2));
+  add(lastWeekdayOfMonth(year, 5, 1));
+  add(observedFixedHoliday(year, 6, 19));
+  add(observedFixedHoliday(year, 7, 4));
+  add(nthWeekdayOfMonth(year, 9, 1, 1));
+  add(nthWeekdayOfMonth(year, 11, 4, 4));
+  add(observedFixedHoliday(year, 12, 25));
+  nasdaqHolidayCache.set(year, keys);
+  return keys;
+}
+
+function isNasdaqHoliday(parts) {
+  const key = ymd(parts);
+  for (const year of [parts.year - 1, parts.year, parts.year + 1]) {
+    if (nasdaqHolidayKeysForYear(year).has(key)) return true;
   }
-  return { candidate, openTime, closeTime };
+  return false;
+}
+
+function isNasdaqTradingDate(parts) {
+  return parts.weekday >= 1 && parts.weekday <= 5 && !isNasdaqHoliday(parts);
+}
+
+function nyDateTime(parts, hour, minute = 0) {
+  return zonedDateTimeToUtc(parts.year, parts.month, parts.day, hour, minute, MARKET_TZ);
+}
+
+function sgtDateTime(parts, hour, minute = 0) {
+  return zonedDateTimeToUtc(parts.year, parts.month, parts.day, hour, minute, SESSION_TZ);
+}
+
+function addMinutes(date, minutes) {
+  return new Date(date.getTime() + minutes * 60000);
+}
+
+function formatTimeRange(start, end) {
+  return `${sgtHourMinute(start)}-${sgtHourMinute(end)}`;
+}
+
+function sessionById(id) {
+  return sessions.find(session => session.id === id);
+}
+
+function attachWindowMeta(sessionId, start, end) {
+  const session = sessionById(sessionId);
+  return { ...session, start, end, timeLabel: formatTimeRange(start, end) };
+}
+
+function buildWindows(now) {
+  const sgtParts = zonedParts(now, SESSION_TZ);
+  const windows = [];
+  for (let offset = -3; offset <= 8; offset += 1) {
+    const tradingDate = calendarDate(sgtParts, offset);
+    if (!isNasdaqTradingDate(tradingDate)) continue;
+    const asiaStart = sgtDateTime(tradingDate, 8, 0);
+    const europeStart = sgtDateTime(tradingDate, 15, 0);
+    const cashOpen = nyDateTime(tradingDate, 9, 30);
+    const cashClose = nyDateTime(tradingDate, 16, 0);
+    const afterClose = addMinutes(cashClose, 49);
+    const pauseEnd = nyDateTime(tradingDate, 18, 5);
+    const pauseEndSgtParts = zonedParts(pauseEnd, SESSION_TZ);
+    const asiaNextStart = sgtDateTime(pauseEndSgtParts, 8, 0);
+    windows.push(attachWindowMeta("asia-overnight", asiaStart, europeStart));
+    windows.push(attachWindowMeta("europe-pre-market", europeStart, cashOpen));
+    windows.push(attachWindowMeta("us-cash-session", cashOpen, cashClose));
+    windows.push(attachWindowMeta("after-hours", cashClose, afterClose));
+    windows.push(attachWindowMeta("daily-pause", afterClose, pauseEnd));
+    windows.push(attachWindowMeta("early-cfd-reopen", pauseEnd, asiaNextStart));
+  }
+  return windows.sort((a, b) => a.start - b.start);
+}
+
+function activeWindow(now) {
+  return buildWindows(now).find(window => now >= window.start && now < window.end) || null;
+}
+
+function nextWindowAfter(now, predicate = () => true) {
+  return buildWindows(now).find(window => window.start > now && predicate(window)) || null;
+}
+
+function nextWindowAfterEnd(window) {
+  return buildWindows(window.end).find(candidate => candidate.start >= window.end && candidate.id !== window.id) || nextWindowAfter(new Date(window.end.getTime() - 1000));
 }
 
 function sessionState(now, config) {
-  let nextWindow = null;
-  for (let offset = -1; offset <= 8; offset += 1) {
-    const window = sessionWindow(now, config, offset);
-    const weekday = window.candidate.weekday;
-    const validDay = config.requiresCashDay ? isNasdaqCashDay(window.candidate) : weekday >= 1 && weekday <= 5;
-    if (!validDay) continue;
-    if (now >= window.openTime && now < window.closeTime) {
-      return { open: true, target: window.closeTime, openSg: formatter(SINGAPORE_TZ, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(window.openTime), closeSg: formatter(SINGAPORE_TZ, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(window.closeTime) };
-    }
-    if (window.openTime > now && (!nextWindow || window.openTime < nextWindow.openTime)) nextWindow = window;
+  const active = activeWindow(now);
+  if (active && active.id === config.id) {
+    const next = nextWindowAfterEnd(active);
+    return {
+      active: true,
+      open: active.tone !== "avoid",
+      tone: active.tone,
+      target: active.end,
+      openSg: sgtHourMinute(active.start),
+      closeSg: sgtHourMinute(active.end),
+      timeLabel: active.timeLabel,
+      statusText: active.tone === "avoid" ? "PAUSED NOW" : "ACTIVE NOW",
+      timerLabel: next ? `Until ${next.label}` : "Until next window"
+    };
   }
-  if (!nextWindow) nextWindow = sessionWindow(now, config, 1);
-  return { open: false, target: nextWindow.openTime, openSg: formatter(SINGAPORE_TZ, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(nextWindow.openTime), closeSg: formatter(SINGAPORE_TZ, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(nextWindow.closeTime) };
+  const upcoming = nextWindowAfter(now, window => window.id === config.id);
+  if (upcoming) {
+    return {
+      active: false,
+      open: false,
+      tone: upcoming.tone,
+      target: upcoming.start,
+      openSg: sgtHourMinute(upcoming.start),
+      closeSg: sgtHourMinute(upcoming.end),
+      timeLabel: upcoming.timeLabel,
+      statusText: "UPCOMING",
+      timerLabel: "Starts in"
+    };
+  }
+  return { active: false, open: false, tone: config.tone, target: now, openSg: "--:--", closeSg: "--:--", timeLabel: config.timeLabel || "--:-----:--", statusText: "CLOSED", timerLabel: "Starts in" };
 }
 
-function nextSundayAt(parts, hour, timeZone) {
-  const today = calendarDate(parts);
-  let offset = (7 - today.weekday) % 7;
-  if (offset === 0 && parts.hour >= hour) offset = 7;
-  const candidate = calendarDate(parts, offset);
-  return zonedDateTimeToUtc(candidate.year, candidate.month, candidate.day, hour, 0, timeZone);
-}
-
-function nextNasdaqCashOpen(parts) {
-  const openMinute = 9 * 60 + 30;
-  const currentMinute = parts.hour * 60 + parts.minute;
-  let offset = 0;
-  while (true) {
-    const candidate = calendarDate(parts, offset);
-    if (isNasdaqCashDay(candidate) && (offset !== 0 || currentMinute < openMinute)) return zonedDateTimeToUtc(candidate.year, candidate.month, candidate.day, 9, 30, "America/New_York");
-    offset += 1;
-  }
+function closedMarketState(now) {
+  const upcoming = nextWindowAfter(now);
+  const nyParts = zonedParts(now, MARKET_TZ);
+  const reason = nyParts.weekday === 0 || nyParts.weekday === 6 ? "Weekend" : (isNasdaqHoliday(nyParts) ? "Holiday" : "Between sessions");
+  return {
+    open: false,
+    title: "Market closed",
+    detail: reason,
+    target: upcoming?.start || now,
+    label: upcoming ? `Until ${upcoming.label}` : "Until next session"
+  };
 }
 
 function nasdaqMarketState(now) {
-  const timeZone = "America/New_York";
-  const parts = zonedParts(now, timeZone);
-  const date = calendarDate(parts);
-  const minute = parts.hour * 60 + parts.minute;
-  const openMinute = 9 * 60 + 30;
-  const cashClose = nasdaqCashCloseFor(date);
-  const closeMinute = cashClose.hour * 60 + (cashClose.minute || 0);
-  const cashDay = isNasdaqCashDay(date);
-  const open = cashDay && minute >= openMinute && minute < closeMinute;
-  if (open) return { open, target: zonedDateTimeToUtc(parts.year, parts.month, parts.day, cashClose.hour, cashClose.minute || 0, timeZone), label: cashClose.hour < 16 ? "Until early NASDAQ cash close" : "Until NASDAQ cash close", detail: "NASDAQ cash session" };
-  return { open, target: nextNasdaqCashOpen(parts), label: cashDay && minute < openMinute ? "Until NASDAQ cash open" : "Until next NASDAQ cash open", detail: cashDay ? (minute < openMinute ? "Pre-market before NASDAQ cash open" : "After NASDAQ cash close") : "NASDAQ cash market holiday/weekend" };
+  const current = activeWindow(now);
+  if (!current) return closedMarketState(now);
+  const next = nextWindowAfterEnd(current);
+  return {
+    open: current.tone !== "avoid",
+    title: current.tone === "avoid" ? "Market paused" : "Market open",
+    detail: current.label,
+    target: current.end,
+    label: next ? `Until ${next.label}` : "Until next session"
+  };
 }
-
 function updateClocks() {
   const now = new Date();
   $("#sgTime").textContent = formatter(SINGAPORE_TZ, {
     hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23"
   }).format(now);
-  $("#sgDate").textContent = `${formatter(SINGAPORE_TZ, { weekday: "short", day: "2-digit", month: "short" }).format(now)} - SGT`;
+  $("#sgDate").textContent = `${formatter(SINGAPORE_TZ, { weekday: "short", day: "2-digit", month: "short" }).format(now)} SGT`;
 
   const market = nasdaqMarketState(now);
-  $("#marketState").textContent = market.open ? "NASDAQ cash open" : "NASDAQ cash closed";
+  $("#marketState").textContent = market.title;
   $("#marketStateDetail").textContent = market.detail;
   $("#marketCountdown").textContent = countdown(market.target - now);
   $("#marketCountdownLabel").textContent = market.label;
@@ -202,12 +330,13 @@ function updateClocks() {
   sessions.forEach(session => {
     const state = sessionState(now, session);
     const card = $(`[data-session="${session.id}"]`);
-    card.classList.toggle("open", state.open);
+    card.classList.toggle("open", state.active);
+    card.classList.toggle("avoid", state.active && state.tone === "avoid");
     card.querySelector("h3").textContent = session.label;
-    card.querySelector(".session-status").textContent = state.open ? "OPEN NOW" : "CLOSED";
+    card.querySelector(".session-status").textContent = state.statusText || (state.open ? "OPEN NOW" : "CLOSED");
     card.querySelector(".session-timer strong").textContent = countdown(state.target - now);
-    card.querySelector(".session-timer small").textContent = state.open ? "Until close" : "Until open";
-    card.querySelector(".session-local-time")?.replaceChildren(`${state.openSg}-${state.closeSg} SGT ? ${session.note}`);
+    card.querySelector(".session-timer small").textContent = state.timerLabel || (state.open ? "Until close" : "Until open");
+    card.querySelector(".session-local-time")?.replaceChildren(`${state.timeLabel || `${state.openSg}-${state.closeSg}`} SGT | ${session.note}`);
   });
 }
 

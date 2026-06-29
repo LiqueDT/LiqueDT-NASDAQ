@@ -10,17 +10,17 @@
   <meta name="description" content="LiqueDT is a live NASDAQ market context companion for sessions, related markets, economic events and news.">
   <title>LiqueDT &mdash; NASDAQ market context</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="favicon-32.png?v=1.0.14" type="image/png" sizes="32x32">
-  <link rel="shortcut icon" href="favicon.ico?v=1.0.14" type="image/x-icon">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1.0.14">
-  <link rel="stylesheet" href="styles.css?v=1.0.14">
+  <link rel="icon" href="favicon-32.png?v=1.0.20" type="image/png" sizes="32x32">
+  <link rel="shortcut icon" href="favicon.ico?v=1.0.20" type="image/x-icon">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1.0.20">
+  <link rel="stylesheet" href="styles.css?v=1.0.20">
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to market overview</a>
 
   <header class="app-header">
     <a class="brand" href="#overview" aria-label="LiqueDT home">
-      <img src="icon.svg?v=1.0.14" alt="" width="40" height="40">
+      <img src="icon.svg?v=1.0.20" alt="" width="40" height="40">
       <span><strong>LiqueDT<span>.</span></strong><small>NASDAQ CONTEXT</small></span>
     </a>
 
@@ -35,7 +35,7 @@
     <div class="market-header" aria-live="polite">
       <div class="market-header-status">
         <span id="marketDot" class="market-dot"></span>
-        <span><strong id="marketState">Checking market</strong><small id="marketStateDetail">NASDAQ cash hours</small></span>
+        <span><strong id="marketState">Checking market</strong><small id="marketStateDetail">Current session</small></span>
       </div>
       <div class="header-countdown"><strong id="marketCountdown">--:--:--</strong><small id="marketCountdownLabel">Next change</small></div>
       <div class="sg-clock"><strong id="sgTime">--:--:--</strong><small id="sgDate">Singapore</small></div>
@@ -129,22 +129,40 @@
     <section class="session-section" aria-labelledby="sessionsTitle">
       <div class="section-heading compact">
         <div><p class="eyebrow">MARKET WINDOWS &middot; SGT</p><h2 id="sessionsTitle">Where liquidity is awake</h2></div>
-        <p>NASDAQ cash timing follows Nasdaq cash hours automatically, including U.S. daylight saving and known 2026 market holidays.</p>
+        <p>Main sessions show the trading context windows. Status windows stay separate for low-liquidity, pause and early-reopen conditions.</p>
       </div>
-      <div id="sessionGrid" class="session-grid">
-        <article class="session-card" data-session="asia">
+      <div id="sessionGrid" class="session-grid main-session-grid">
+        <article class="session-card" data-session="asia-overnight">
           <div class="session-number">01</div>
-          <div><span class="session-status">CHECKING</span><h3>Asia</h3><p>08:00&ndash;16:00 SGT</p></div>
+          <div><span class="session-status">CHECKING</span><h3>Asia / overnight</h3><p class="session-local-time">08:00-15:00 SGT | Range building, slower movement</p></div>
           <div class="session-timer"><strong>--:--:--</strong><small>Next change</small></div>
         </article>
-        <article class="session-card" data-session="london">
+        <article class="session-card" data-session="europe-pre-market">
           <div class="session-number">02</div>
-          <div><span class="session-status">CHECKING</span><h3>Europe pre-market</h3><p class="session-local-time">Before U.S. cash open</p></div>
+          <div><span class="session-status">CHECKING</span><h3>Europe pre-market</h3><p class="session-local-time">15:00-21:30 SGT | Bias starts forming before U.S. cash open</p></div>
           <div class="session-timer"><strong>--:--:--</strong><small>Next change</small></div>
         </article>
-        <article class="session-card" data-session="new-york">
+        <article class="session-card" data-session="us-cash-session">
           <div class="session-number">03</div>
-          <div><span class="session-status">CHECKING</span><h3>U.S. cash session</h3><p class="session-local-time">09:30-16:00 New York</p></div>
+          <div><span class="session-status">CHECKING</span><h3>U.S. cash session</h3><p class="session-local-time">21:30-04:00 SGT | Main NASDAQ liquidity</p></div>
+          <div class="session-timer"><strong>--:--:--</strong><small>Next change</small></div>
+        </article>
+      </div>
+      <div class="status-window-heading"><p class="eyebrow">STATUS WINDOWS &middot; SGT</p><span>Not treated as main sessions</span></div>
+      <div id="statusWindowGrid" class="session-grid status-window-grid">
+        <article class="session-card status-card" data-session="after-hours">
+          <div class="session-number">04</div>
+          <div><span class="session-status">CHECKING</span><h3>After-hours</h3><p class="session-local-time">04:00-04:49 SGT | Low liquidity</p></div>
+          <div class="session-timer"><strong>--:--:--</strong><small>Next change</small></div>
+        </article>
+        <article class="session-card status-card" data-session="daily-pause">
+          <div class="session-number">05</div>
+          <div><span class="session-status">CHECKING</span><h3>Daily pause</h3><p class="session-local-time">04:49-06:05 SGT | Market paused</p></div>
+          <div class="session-timer"><strong>--:--:--</strong><small>Next change</small></div>
+        </article>
+        <article class="session-card status-card" data-session="early-cfd-reopen">
+          <div class="session-number">06</div>
+          <div><span class="session-status">CHECKING</span><h3>Early CFD reopen</h3><p class="session-local-time">06:05-08:00 SGT | Observe</p></div>
           <div class="session-timer"><strong>--:--:--</strong><small>Next change</small></div>
         </article>
       </div>
@@ -160,8 +178,8 @@
         <article class="chart-card">
           <div class="chart-toolbar">
             <div>
-              <span id="activeMarketTag">PRIMARY NAS100 CASH CFD</span>
-              <h3 id="activeMarketName">NAS100 / Nasdaq 100 Cash CFD</h3>
+              <span id="activeMarketTag">PRIMARY NAS100 SPOT CFD</span>
+              <h3 id="activeMarketName">NAS100 / Nasdaq 100 Spot CFD</h3>
             </div>
             <div id="marketTabs" class="market-tabs" role="tablist" aria-label="Chart symbol">
               <button class="active" type="button" role="tab" aria-selected="true" data-symbol="CAPITALCOM:US100">NAS100</button>
@@ -281,7 +299,7 @@
   </main>
 
   <footer>
-    <a class="brand footer-brand" href="#overview"><img src="icon.svg?v=1.0.14" alt="" width="32" height="32"><strong>LiqueDT<span>.</span></strong></a>
+    <a class="brand footer-brand" href="#overview"><img src="icon.svg?v=1.0.20" alt="" width="32" height="32"><strong>LiqueDT<span>.</span></strong></a>
     <p>Liquidity context for NASDAQ &middot; Singapore time everywhere</p>
     <p>Market hours are indicative and can vary by broker and holiday.</p>
   </footer>
@@ -317,6 +335,6 @@
   </dialog>
 
   <noscript><div class="noscript">LiqueDT needs JavaScript for live clocks, data and charts.</div></noscript>
-  <script src="app.js?v=1.0.14" defer></script>
+  <script src="app.js?v=1.0.20" defer></script>
 </body>
 </html>

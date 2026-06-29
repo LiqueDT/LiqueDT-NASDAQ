@@ -1,4 +1,4 @@
-"use strict";
+﻿"use strict";
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -25,10 +25,10 @@ const widgetSymbols = {
   "CAPITALCOM:US100": { name: "NAS100 / Nasdaq 100 Spot CFD", tag: "PRIMARY NAS100 SPOT CFD" },
   "CAPITALCOM:US500": { name: "US500 / S&P 500 Cash CFD", tag: "US500 / BROAD RISK CONFIRMATION" },
   "CAPITALCOM:US30": { name: "US30 / Dow Cash CFD", tag: "US30 / BROADER SENTIMENT" },
-  "TVC:US10Y": { name: "U.S. 10Y Treasury Yield", tag: "DURATION / RATES · TV CHART USB10YUSD PROXY", interval: "D", range: "12M", chartSymbol: "OANDA:USB10YUSD" },
-  "CBOE:VXN": { name: "Nasdaq-100 Volatility Index", tag: "NASDAQ-SPECIFIC FEAR · TV CHART VIXY", interval: "D", range: "12M", chartSymbol: "CBOE:VIXY" },
-  "NASDAQ:SOX": { name: "PHLX Semiconductor Index", tag: "CHIP / AI LEADERSHIP · TV CHART SOXX", interval: "D", range: "12M", chartSymbol: "NASDAQ:SOXX" },
-  "TVC:DXY": { name: "U.S. Dollar Index", tag: "GLOBAL FX CONDITIONS · TV CHART CAPITALCOM:DXY", interval: "D", range: "12M", chartSymbol: "CAPITALCOM:DXY" }
+  "TVC:US10Y": { name: "U.S. 10Y Treasury Yield", tag: "DURATION / RATES Â· TV CHART USB10YUSD PROXY", interval: "D", range: "12M", chartSymbol: "OANDA:USB10YUSD" },
+  "CBOE:VXN": { name: "Nasdaq-100 Volatility Index", tag: "NASDAQ-SPECIFIC FEAR Â· TV CHART VIXY", interval: "D", range: "12M", chartSymbol: "CBOE:VIXY" },
+  "NASDAQ:SOX": { name: "PHLX Semiconductor Index", tag: "CHIP / AI LEADERSHIP Â· TV CHART SOXX", interval: "D", range: "12M", chartSymbol: "NASDAQ:SOXX" },
+  "TVC:DXY": { name: "U.S. Dollar Index", tag: "GLOBAL FX CONDITIONS Â· TV CHART CAPITALCOM:DXY", interval: "D", range: "12M", chartSymbol: "CAPITALCOM:DXY" }
 };
 
 const tickerDefinitions = [
@@ -576,6 +576,29 @@ function olderThan(value, minutes) {
   return Boolean(date && minutes && Date.now() - date.getTime() > minutes * 60000);
 }
 
+function compactDateLabel(value) {
+  if (!value) return "";
+  const text = String(value).trim();
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const dmy = text.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);
+  let day = "";
+  let month = "";
+  let year = "";
+  if (iso) {
+    [, year, month, day] = iso;
+  } else if (dmy) {
+    [, day, month, year] = dmy;
+    if (year.length === 2) year = `20${year}`;
+  } else {
+    const parsed = new Date(text);
+    if (Number.isNaN(parsed.getTime())) return sourceDateLabel(value);
+    day = String(parsed.getUTCDate()).padStart(2, "0");
+    month = String(parsed.getUTCMonth() + 1).padStart(2, "0");
+    year = String(parsed.getUTCFullYear());
+  }
+  const monthName = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"][Number(month) - 1];
+  return monthName ? `${Number(day)} ${monthName} ${year}` : sourceDateLabel(value);
+}
 function statusFreshness(payload, sourceName, options = {}) {
   const backup = Boolean(payload?.stale || payload?.static_snapshot);
   const dataAt = firstTimestamp(payload?.snapshot_data_at, payload?.updated_at, payload?.snapshot_refreshed_at, payload?.snapshot_generated_at);
@@ -584,7 +607,7 @@ function statusFreshness(payload, sourceName, options = {}) {
   const contentAt = firstTimestamp(options.contentAt);
   const stampTarget = dataAt || generatedAt;
   const stamp = stampTarget ? `${sgtClock(stampTarget)} SGT` : "time unknown";
-  const badge = backup ? `${stale ? "STALE " : ""}SNAPSHOT - ${sgtClock(stampTarget)}` : (options.liveBadge || "LIVE DATA");
+  const badge = backup ? `${stale ? "STALE " : ""}SNAPSHOT ${sgtClock(stampTarget)}` : (options.liveBadge || "LIVE DATA");
   const health = backup ? `Snap ${sgtClock(stampTarget)}` : (options.liveHealth || "Live");
   const contentNote = contentAt && options.contentLabel
     ? ` - ${options.contentLabel} ${relativeTime(contentAt)}`
@@ -978,7 +1001,7 @@ function renderCompanies(payload) {
   const checkedAt = firstTimestamp(payload.snapshot_generated_at, payload.snapshot_attempted_at, payload.updated_at);
   const checkedLabel = checkedAt ? ` - app checked ${sgtStamp(checkedAt)}` : "";
   status.className = `source-status ${backup ? "delayed" : "live"}`;
-  status.textContent = sourceDate ? `AS OF ${sourceDate}` : (backup ? freshness.badge : "NASDAQ LIVE");
+  status.textContent = sourceDate ? `AS OF ${compactDateLabel(payload.as_of) || sourceDate}` : (backup ? freshness.badge : "NASDAQ LIVE");
   status.title = sourceDate
     ? `${payload.source || "Official Nasdaq source"} list date ${sourceDate}.${checkedAt ? ` App snapshot checked ${sgtStamp(checkedAt)}.` : ""} If Nasdaq updates the source date, the next app/GitHub refresh will display the new date.`
     : freshness.detail;
@@ -1006,7 +1029,7 @@ function renderPulse(pulse, backup = false, freshness = null) {
   const score = Math.max(-1, Math.min(1, Number(pulse.score) || 0));
   latestNewsPulse = { ...pulse, score, backup, freshness };
   status.className = `source-status ${backup ? "delayed" : "live"}`;
-  status.textContent = backup && freshness ? `${freshness.badge} - ${pulse.sample_size || 0} HEADLINES` : `${pulse.sample_size || 0} HEADLINES`;
+  status.textContent = backup && freshness ? `${freshness.badge} · ${pulse.sample_size || 0} HEADLINES` : `${pulse.sample_size || 0} HEADLINES`;
   status.title = freshness?.detail || "";
   $("#pulseNeedle").style.left = `${50 + score * 42}%`;
   $("#pulseTitle").textContent = pulse.title || "Balanced narrative";
@@ -1103,3 +1126,4 @@ function init() {
 }
 
 init();
+

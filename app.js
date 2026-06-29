@@ -362,7 +362,7 @@ function renderHealthSummary() {
       .map(([key]) => healthMeta[key]?.summary || `${healthLabels[key] || key}: snapshot`);
     title = delayed.some(text => text.toLowerCase().includes("stale")) ? "Using stale snapshot data" : "Live with snapshot data";
     const build = latestStaticBuild?.snapshot_generated_at || latestStaticBuild?.updated_at;
-    const buildDetail = build ? `GitHub checked ${sgtClock(build)} SGT (${ageLabel(build)})` : "";
+    const buildDetail = build ? `App checked ${sgtClock(build)} SGT (${ageLabel(build)})` : "";
     detail = [buildDetail, delayed.length ? delayed.join(" - ") : "A cached or backup source is currently active"].filter(Boolean).join(" - ");
   }
   dot.className = `health-dot ${state}`;
@@ -562,7 +562,7 @@ function sourceDateLabel(value) {
   const text = String(value).trim();
   const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
-  const named = text.match(/^([A-Za-z]{3,9})\s+(\d{1,2}),\s*(\d{4})$/);
+  const named = text.match(/^([A-Za-z]{3,9})\s+(\d{1,2}),\s*(\d{4})(?:\s+.*)?$/);
   if (named) {
     const months = { jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06", jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12" };
     const month = months[named[1].slice(0, 3).toLowerCase()];
@@ -604,7 +604,7 @@ function statusFreshness(payload, sourceName, options = {}) {
   const summaryBits = [`${sourceName}: ${stale ? "stale " : ""}${stamp}`];
   if (contentAt && options.contentLabel) summaryBits.push(`${options.contentLabel} ${relativeTime(contentAt)}`);
   const footer = backup
-    ? `${stale ? "Stale snapshot" : "Snapshot"} from ${sgtStamp(stampTarget)}${generatedAt && generatedAt.getTime() !== stampTarget?.getTime() ? ` - GitHub checked ${sgtStamp(generatedAt)}` : ""}${contentNote}`
+    ? `${stale ? "Stale snapshot" : "Snapshot"} from ${sgtStamp(stampTarget)}${generatedAt && generatedAt.getTime() !== stampTarget?.getTime() ? ` - App checked ${sgtStamp(generatedAt)}` : ""}${contentNote}`
     : `Live source updated ${sgtStamp(stampTarget)}${contentNote}`;
 
   return {
@@ -1006,7 +1006,7 @@ function renderPulse(pulse, backup = false, freshness = null) {
   const score = Math.max(-1, Math.min(1, Number(pulse.score) || 0));
   latestNewsPulse = { ...pulse, score, backup, freshness };
   status.className = `source-status ${backup ? "delayed" : "live"}`;
-  status.textContent = backup && freshness ? `${freshness.badge} - ${pulse.sample_size || 0}` : `${pulse.sample_size || 0} HEADLINES`;
+  status.textContent = backup && freshness ? `${freshness.badge} - ${pulse.sample_size || 0} HEADLINES` : `${pulse.sample_size || 0} HEADLINES`;
   status.title = freshness?.detail || "";
   $("#pulseNeedle").style.left = `${50 + score * 42}%`;
   $("#pulseTitle").textContent = pulse.title || "Balanced narrative";

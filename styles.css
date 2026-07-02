@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   --ink: #0b1016;
   --ink-2: #10171f;
   --surface: #151d26;
@@ -458,8 +458,10 @@ dialog p:not(.eyebrow) { color: #aab5c1; font-size: 11px; line-height: 1.75; }
   .calendar-copy { min-width: 0; }
   .calendar-copy h3, .calendar-copy p { overflow-wrap: anywhere; }
   .calendar-item .impact { grid-column: 2; }
-  .principle-strip { align-items: flex-start; flex-direction: column; }
-  .principle-strip > span { width: 100%; height: 1px; }
+  .principle-strip { align-items: stretch; flex-direction: row; flex-wrap: wrap; gap: 10px; }
+  .principle-strip > span { display: none; }
+  .principle-strip p { flex: 1 1 100%; }
+  .principle-strip .quiet-button { flex: 1 1 calc(50% - 5px); justify-content: center; min-width: 0; text-align: center; }
   footer { min-height: 120px; }
   footer p:last-child { max-width: 160px; }
 }
@@ -468,3 +470,4 @@ dialog p:not(.eyebrow) { color: #aab5c1; font-size: 11px; line-height: 1.75; }
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
   .quiet-button.loading svg, .loading-row span { animation: none !important; }
 }
+

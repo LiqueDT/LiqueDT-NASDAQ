@@ -1,4 +1,4 @@
-const CACHE = "liquedt-nasdaq-shell-v1.0.23";
+﻿const CACHE = "liquedt-nasdaq-shell-v1.0.25";
 const SHELL = ["./", "index.html", "styles.css", "app.js", "icon.svg", "favicon.ico", "favicon-32.png", "app-icon-192.png", "app-icon-512.png", "apple-touch-icon.png", "manifest.webmanifest"];
 
 self.addEventListener("install", event => {
@@ -26,3 +26,4 @@ self.addEventListener("fetch", event => {
       .catch(() => caches.match(event.request).then(cached => cached || caches.match("index.html")))
   );
 });
+

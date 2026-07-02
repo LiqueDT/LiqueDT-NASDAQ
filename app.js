@@ -468,7 +468,7 @@ function mountChart(symbol = activeSymbol) {
 }
 
 async function fetchJson(name) {
-  const candidates = name === "companies" ? [`data/${name}.json`, `api/${name}`] : [`api/${name}`, `data/${name}.json`];
+  const candidates = [`api/${name}`, `data/${name}.json`];
   let lastError = new Error("No data source responded");
   for (const path of candidates) {
     const controller = new AbortController();
@@ -607,15 +607,15 @@ function statusFreshness(payload, sourceName, options = {}) {
   const contentAt = firstTimestamp(options.contentAt);
   const stampTarget = dataAt || generatedAt;
   const stamp = stampTarget ? `${sgtClock(stampTarget)} SGT` : "time unknown";
-  const badge = backup ? `${stale ? "STALE " : ""}SNAPSHOT ${sgtClock(stampTarget)}` : (options.liveBadge || "LIVE DATA");
+  const badge = backup ? `${stale ? "STALE " : ""}SNAPSHOT · ${sgtClock(stampTarget)}` : (options.liveBadge || "LIVE DATA");
   const health = backup ? `Snap ${sgtClock(stampTarget)}` : (options.liveHealth || "Live");
   const contentNote = contentAt && options.contentLabel
-    ? ` - ${options.contentLabel} ${relativeTime(contentAt)}`
+    ? ` · ${options.contentLabel} ${relativeTime(contentAt)}`
     : "";
 
   let detail;
   if (backup && stale) {
-    const retry = generatedAt ? `; GitHub retry ${sgtStamp(generatedAt)}` : "";
+    const retry = generatedAt ? `; App retry ${sgtStamp(generatedAt)}` : "";
     detail = `Stale ${sourceName.toLowerCase()} snapshot from ${sgtStamp(stampTarget)} (${ageLabel(stampTarget)})${retry}${contentNote}`;
   } else if (backup) {
     const built = generatedAt ? `; built ${sgtStamp(generatedAt)}` : "";
@@ -627,7 +627,7 @@ function statusFreshness(payload, sourceName, options = {}) {
   const summaryBits = [`${sourceName}: ${stale ? "stale " : ""}${stamp}`];
   if (contentAt && options.contentLabel) summaryBits.push(`${options.contentLabel} ${relativeTime(contentAt)}`);
   const footer = backup
-    ? `${stale ? "Stale snapshot" : "Snapshot"} from ${sgtStamp(stampTarget)}${generatedAt && generatedAt.getTime() !== stampTarget?.getTime() ? ` - App checked ${sgtStamp(generatedAt)}` : ""}${contentNote}`
+    ? `${stale ? "Stale snapshot" : "Snapshot"} from ${sgtStamp(stampTarget)}${generatedAt && generatedAt.getTime() !== stampTarget?.getTime() ? ` · App checked ${sgtStamp(generatedAt)}` : ""}${contentNote}`
     : `Live source updated ${sgtStamp(stampTarget)}${contentNote}`;
 
   return {
@@ -1126,4 +1126,5 @@ function init() {
 }
 
 init();
+
 

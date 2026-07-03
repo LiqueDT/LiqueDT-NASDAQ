@@ -51,6 +51,7 @@ let latestNewsPulse = null;
 let latestCalendar = null;
 let latestCalendarPulse = null;
 let latestStaticBuild = null;
+let holidayRenderKey = "";
 const WIDGETS_DISABLED = new URLSearchParams(location.search).has("no-widgets");
 const healthState = { market: "checking", charts: "checking", calendar: "checking", news: "checking" };
 const healthMeta = { market: null, charts: null, calendar: null, news: null };
@@ -190,10 +191,157 @@ function isNasdaqHoliday(parts) {
   return false;
 }
 
-function isNasdaqTradingDate(parts) {
-  return parts.weekday >= 1 && parts.weekday <= 5 && !isNasdaqHoliday(parts);
+function isWeekday(parts) {
+  return parts.weekday >= 1 && parts.weekday <= 5;
 }
 
+function isNasdaqTradingDate(parts) {
+  return isWeekday(parts) && !isNasdaqHoliday(parts);
+}
+
+function isCfdScheduleDate(parts) {
+  return isWeekday(parts);
+}
+
+
+function partsToDate(parts) {
+  return new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+}
+
+function sameYmd(a, b) {
+  return a && b && a.year === b.year && a.month === b.month && a.day === b.day;
+}
+
+function nasdaqMarketHolidaysForYear(year) {
+  const thanksgiving = nthWeekdayOfMonth(year, 11, 4, 4);
+  const events = [
+    { name: "New Year's Day", type: "closed", parts: observedFixedHoliday(year, 1, 1) },
+    { name: "Martin Luther King Jr. Day", type: "closed", parts: nthWeekdayOfMonth(year, 1, 1, 3) },
+    { name: "Presidents' Day", type: "closed", parts: nthWeekdayOfMonth(year, 2, 1, 3) },
+    { name: "Good Friday", type: "closed", parts: calendarDate(easterSunday(year), -2) },
+    { name: "Memorial Day", type: "closed", parts: lastWeekdayOfMonth(year, 5, 1) },
+    { name: "Juneteenth", type: "closed", parts: observedFixedHoliday(year, 6, 19) },
+    { name: "Independence Day", type: "closed", parts: observedFixedHoliday(year, 7, 4) },
+    { name: "Labor Day", type: "closed", parts: nthWeekdayOfMonth(year, 9, 1, 1) },
+    { name: "Thanksgiving Day", type: "closed", parts: thanksgiving },
+    { name: "Black Friday early close", type: "early", parts: calendarDate(thanksgiving, 1), closeHour: 13 },
+    { name: "Christmas Eve early close", type: "early", parts: calendarDate({ year, month: 12, day: 24 }), closeHour: 13 },
+    { name: "Christmas Day", type: "closed", parts: observedFixedHoliday(year, 12, 25) }
+  ];
+  const independenceEve = calendarDate({ year, month: 7, day: 3 });
+  if (isWeekday(independenceEve) && !isNasdaqHoliday(independenceEve)) {
+    events.push({ name: "Independence Day early close", type: "early", parts: independenceEve, closeHour: 13 });
+  }
+  return events.filter(event => isWeekday(event.parts) && (event.type === "closed" || !isNasdaqHoliday(event.parts)));
+}
+
+function holidayWindow(event) {
+  const cashOpen = nyDateTime(event.parts, 9, 30);
+  const normalClose = nyDateTime(event.parts, 16, 0);
+  const earlyClose = event.type === "early" ? nyDateTime(event.parts, event.closeHour || 13, 0) : null;
+  return { cashOpen, normalClose, earlyClose, start: event.type === "early" ? earlyClose : cashOpen, end: normalClose };
+}
+
+function upcomingNasdaqHolidays(now = new Date(), limit = 8) {
+  const nyNow = zonedParts(now, MARKET_TZ);
+  const nowKey = ymd(nyNow);
+  const events = [];
+  for (const year of [nyNow.year - 1, nyNow.year, nyNow.year + 1]) {
+    nasdaqMarketHolidaysForYear(year).forEach(event => {
+      const window = holidayWindow(event);
+      const eventKey = ymd(event.parts);
+      if (window.end >= new Date(now.getTime() - 3600000) || eventKey === nowKey) {
+        events.push({ ...event, ...window, key: `${eventKey}-${event.type}-${event.name}` });
+      }
+    });
+  }
+  return [...new Map(events.map(event => [event.key, event])).values()]
+    .sort((a, b) => a.start - b.start)
+    .slice(0, limit);
+}
+
+function holidaySgtLabel(event) {
+  if (event.type === "early") {
+    return `Closes ${sgtDayHourMinute(event.earlyClose)} SGT / ${String(event.closeHour || 13).padStart(2, "0")}:00 ET`;
+  }
+  return `Cash closed ${sgtDayHourMinute(event.cashOpen)}-${sgtDayHourMinute(event.normalClose)} SGT`;
+}
+
+function holidayEtLabel(event) {
+  const label = formatter(MARKET_TZ, { weekday: "short", day: "2-digit", month: "short", year: "numeric" }).format(event.cashOpen);
+  return `${label} ET`;
+}
+
+function holidayState(event, now = new Date()) {
+  const nyNow = zonedParts(now, MARKET_TZ);
+  if (sameYmd(event.parts, nyNow)) return "today";
+  if (event.start <= now && now < event.end) return "active";
+  return "upcoming";
+}
+
+
+function holidayNoticeInfo(now = new Date()) {
+  const events = upcomingNasdaqHolidays(now, 4);
+  const current = events.find(event => holidayState(event, now) === "today" || holidayState(event, now) === "active");
+  if (current) {
+    const title = current.type === "early" ? "Nasdaq early close today" : "Nasdaq cash holiday today";
+    const detail = current.type === "early"
+      ? `${current.name}: ${holidaySgtLabel(current)}. Expect cash liquidity to thin after the early close; CFD hours may differ.`
+      : `${current.name}: ${holidaySgtLabel(current)}. NAS100 CFD may still quote, but Nasdaq cash liquidity is closed.`;
+    return { tone: current.type === "early" ? "early" : "closed", title, detail };
+  }
+  const soon = events.find(event => event.start > now && event.start - now <= 7 * 86400000);
+  if (soon) {
+    const title = soon.type === "early" ? "Upcoming Nasdaq early close" : "Upcoming Nasdaq cash holiday";
+    const detail = `${soon.name}: ${holidaySgtLabel(soon)} · ${holidayEtLabel(soon)}`;
+    return { tone: soon.type === "early" ? "early" : "upcoming", title, detail };
+  }
+  return null;
+}
+
+function renderHolidayNotice(now = new Date()) {
+  const notice = $("#holidayNotice");
+  if (!notice) return;
+  const info = holidayNoticeInfo(now);
+  notice.classList.toggle("hidden", !info);
+  if (!info) return;
+  notice.classList.toggle("closed", info.tone === "closed");
+  notice.classList.toggle("early", info.tone === "early");
+  notice.classList.toggle("upcoming", info.tone === "upcoming");
+  $("#holidayNoticeTitle").textContent = info.title;
+  $("#holidayNoticeDetail").textContent = info.detail;
+}
+function renderHolidayCalendar() {
+  const list = $("#holidayList");
+  const status = $("#holidayStatus");
+  if (!list || !status) return;
+  const now = new Date();
+  const events = upcomingNasdaqHolidays(now, 8);
+  if (!events.length) {
+    status.className = "source-status delayed";
+    status.textContent = "NO UPCOMING";
+    list.innerHTML = '<div class="empty-feed">No upcoming Nasdaq market holidays were found in the generated schedule.</div>';
+    return;
+  }
+  const current = events.find(event => holidayState(event, now) === "today" || holidayState(event, now) === "active");
+  status.className = `source-status ${current ? "delayed" : "live"}`;
+  status.textContent = current ? "HOLIDAY NOW" : "LOCAL SCHEDULE";
+  const renderKey = events.map(event => `${event.key}:${holidayState(event, now)}`).join("|");
+  if (renderKey === holidayRenderKey) return;
+  holidayRenderKey = renderKey;
+  list.innerHTML = events.map(event => {
+    const state = holidayState(event, now);
+    const badge = state === "today" ? "TODAY" : event.type === "early" ? "EARLY CLOSE" : "CLOSED";
+    const note = event.type === "early"
+      ? "Nasdaq cash market closes at 1:00 p.m. ET; liquidity usually thins after the early close."
+      : "Nasdaq cash market is closed; NAS100 CFD availability can still vary by broker.";
+    return `<article class="holiday-item ${escapeHtml(event.type)} ${escapeHtml(state)}">
+      <div class="holiday-date"><strong>${escapeHtml(formatter(SESSION_TZ, { day: "2-digit", month: "short" }).format(event.cashOpen))}</strong><small>SGT</small></div>
+      <div class="holiday-copy"><h3>${escapeHtml(event.name)}</h3><p>${escapeHtml(holidaySgtLabel(event))}</p><p>${escapeHtml(holidayEtLabel(event))} · ${escapeHtml(note)}</p></div>
+      <span class="holiday-badge ${escapeHtml(event.type)} ${escapeHtml(state)}">${escapeHtml(badge)}</span>
+    </article>`;
+  }).join("");
+}
 function nyDateTime(parts, hour, minute = 0) {
   return zonedDateTimeToUtc(parts.year, parts.month, parts.day, hour, minute, MARKET_TZ);
 }
@@ -214,9 +362,9 @@ function sessionById(id) {
   return sessions.find(session => session.id === id);
 }
 
-function attachWindowMeta(sessionId, start, end) {
+function attachWindowMeta(sessionId, start, end, meta = {}) {
   const session = sessionById(sessionId);
-  return { ...session, start, end, timeLabel: formatTimeRange(start, end) };
+  return { ...session, ...meta, start, end, timeLabel: formatTimeRange(start, end) };
 }
 
 function buildWindows(now) {
@@ -224,7 +372,8 @@ function buildWindows(now) {
   const windows = [];
   for (let offset = -3; offset <= 8; offset += 1) {
     const tradingDate = calendarDate(sgtParts, offset);
-    if (!isNasdaqTradingDate(tradingDate)) continue;
+    if (!isCfdScheduleDate(tradingDate)) continue;
+    const cashHoliday = isNasdaqHoliday(tradingDate);
     const asiaStart = sgtDateTime(tradingDate, 8, 0);
     const europeStart = sgtDateTime(tradingDate, 15, 0);
     const cashOpen = nyDateTime(tradingDate, 9, 30);
@@ -233,12 +382,13 @@ function buildWindows(now) {
     const pauseEnd = nyDateTime(tradingDate, 18, 5);
     const pauseEndSgtParts = zonedParts(pauseEnd, SESSION_TZ);
     const asiaNextStart = sgtDateTime(pauseEndSgtParts, 8, 0);
-    windows.push(attachWindowMeta("asia-overnight", asiaStart, europeStart));
-    windows.push(attachWindowMeta("europe-pre-market", europeStart, cashOpen));
-    windows.push(attachWindowMeta("us-cash-session", cashOpen, cashClose));
-    windows.push(attachWindowMeta("after-hours", cashClose, afterClose));
-    windows.push(attachWindowMeta("daily-pause", afterClose, pauseEnd));
-    windows.push(attachWindowMeta("early-cfd-reopen", pauseEnd, asiaNextStart));
+    const holidayMeta = { cashHoliday };
+    windows.push(attachWindowMeta("asia-overnight", asiaStart, europeStart, holidayMeta));
+    windows.push(attachWindowMeta("europe-pre-market", europeStart, cashOpen, holidayMeta));
+    windows.push(attachWindowMeta("us-cash-session", cashOpen, cashClose, holidayMeta));
+    windows.push(attachWindowMeta("after-hours", cashClose, afterClose, holidayMeta));
+    windows.push(attachWindowMeta("daily-pause", afterClose, pauseEnd, holidayMeta));
+    windows.push(attachWindowMeta("early-cfd-reopen", pauseEnd, asiaNextStart, holidayMeta));
   }
   return windows.sort((a, b) => a.start - b.start);
 }
@@ -267,7 +417,7 @@ function sessionState(now, config) {
       openSg: sgtHourMinute(active.start),
       closeSg: sgtHourMinute(active.end),
       timeLabel: active.timeLabel,
-      statusText: active.tone === "avoid" ? "PAUSED NOW" : "ACTIVE NOW",
+      statusText: active.tone === "avoid" ? "PAUSED NOW" : (active.cashHoliday ? "CFD ACTIVE" : "ACTIVE NOW"),
       timerLabel: next ? `Until ${next.label}` : "Until next window"
     };
   }
@@ -307,8 +457,8 @@ function nasdaqMarketState(now) {
   const next = nextWindowAfterEnd(current);
   return {
     open: current.tone !== "avoid",
-    title: current.tone === "avoid" ? "Market paused" : "Market open",
-    detail: current.label,
+    title: current.tone === "avoid" ? "Market paused" : (current.cashHoliday ? "CFD active" : "Market open"),
+    detail: current.cashHoliday && current.tone !== "avoid" ? `Cash holiday / ${current.label}` : current.label,
     target: current.end,
     label: next ? `Until ${next.label}` : "Until next session"
   };
@@ -319,6 +469,9 @@ function updateClocks() {
     hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23"
   }).format(now);
   $("#sgDate").textContent = `${formatter(SINGAPORE_TZ, { weekday: "short", day: "2-digit", month: "short" }).format(now)} SGT`;
+
+  renderHolidayCalendar();
+  renderHolidayNotice(now);
 
   const market = nasdaqMarketState(now);
   $("#marketState").textContent = market.title;
@@ -336,7 +489,8 @@ function updateClocks() {
     card.querySelector(".session-status").textContent = state.statusText || (state.open ? "OPEN NOW" : "CLOSED");
     card.querySelector(".session-timer strong").textContent = countdown(state.target - now);
     card.querySelector(".session-timer small").textContent = state.timerLabel || (state.open ? "Until close" : "Until open");
-    card.querySelector(".session-local-time")?.replaceChildren(`${state.timeLabel || `${state.openSg}-${state.closeSg}`} SGT | ${session.note}`);
+    const holidayNote = state.active && activeWindow(now)?.cashHoliday && state.tone !== "avoid" ? "Cash holiday / CFD liquidity" : session.note;
+    card.querySelector(".session-local-time")?.replaceChildren(`${state.timeLabel || `${state.openSg}-${state.closeSg}`} SGT | ${holidayNote}`);
   });
 }
 
@@ -571,6 +725,19 @@ function sourceDateLabel(value) {
   return text;
 }
 
+function nasdaqSourceDateLabel(value) {
+  if (!value) return "";
+  const text = String(value).trim().replace(/\s+/g, " ");
+  const named = text.match(/^([A-Za-z]{3,9})\s+(\d{1,2}),\s*(\d{4})(?:\s+.*)?$/);
+  if (named) return `${named[1].slice(0, 3)} ${Number(named[2])}, ${named[3]}`;
+  return sourceDateLabel(value);
+}
+
+function isCalendarEventActive(event, graceMinutes = 60) {
+  if (!event?.time_utc) return true;
+  const date = timestamp(event.time_utc);
+  return !date || date.getTime() >= Date.now() - graceMinutes * 60000;
+}
 function olderThan(value, minutes) {
   const date = timestamp(value);
   return Boolean(date && minutes && Date.now() - date.getTime() > minutes * 60000);
@@ -851,27 +1018,15 @@ function renderTotalPulse() {
 
 function renderCalendar(payload) {
   const status = $("#calendarStatus");
-  if (!payload.ok || !payload.events?.length) {
+  if (!payload?.ok) {
     latestCalendar = null;
     latestCalendarPulse = null;
-    if (!WIDGETS_DISABLED) {
-      status.className = "source-status delayed";
-      status.textContent = "LIVE WIDGET";
-      status.title = "Parsed calendar feed is unavailable; TradingView calendar widget is loaded temporarily.";
-      setHealth("calendar", "delayed", "Widget", { summary: "Calendar: live widget", detail: status.title });
-      $("#calendarFreshnessNote").textContent = "Live backup widget - USD high/medium impact";
-      mountWidget($("#calendarList"), "embed-widget-events.js", {
-        colorTheme: "dark", isTransparent: true, width: "100%", height: 385,
-        locale: "en", importanceFilter: "0,1", countryFilter: "us"
-      });
-    } else {
-      status.className = "source-status offline";
-      status.textContent = "UNAVAILABLE";
-      status.title = "Calendar feed is unavailable.";
-      setHealth("calendar", "offline", "Unavailable", null);
-      $("#calendarFreshnessNote").textContent = "Calendar feed unavailable";
-      $("#calendarList").innerHTML = '<div class="empty-feed">The calendar feed is unavailable right now. Use the full calendar link below before making time-sensitive decisions.</div>';
-    }
+    status.className = "source-status offline";
+    status.textContent = "NO FEED";
+    status.title = "Parsed ForexFactory calendar feed is unavailable. LiqueDT no longer switches this section to a TradingView widget.";
+    setHealth("calendar", "offline", "No feed", { summary: "Calendar: parsed feed unavailable", detail: status.title });
+    $("#calendarFreshnessNote").textContent = "Parsed ForexFactory calendar unavailable - use the source link below for a direct check";
+    $("#calendarList").innerHTML = '<div class="empty-feed">Parsed ForexFactory calendar could not be loaded. Use the full calendar link below for a direct check.</div>';
     renderTotalPulse();
     return false;
   }
@@ -884,8 +1039,16 @@ function renderCalendar(payload) {
   status.title = freshness.detail;
   setHealth("calendar", backup ? "delayed" : "live", freshness.health, freshness);
   $("#calendarFreshnessNote").textContent = `${freshness.footer} - USD high/medium impact`;
+  const moreLink = $("#calendarMoreLink");
+  if (moreLink && payload.more_url) moreLink.href = payload.more_url;
   const groups = new Map();
-  payload.events.slice(0, 12).forEach(event => {
+  const calendarEvents = (Array.isArray(payload.events) ? payload.events : []).filter(event => isCalendarEventActive(event, 60));
+  if (!calendarEvents.length) {
+    $("#calendarList").innerHTML = '<div class="empty-feed">No upcoming or recently released NASDAQ-relevant USD high/medium events are listed in the current ForexFactory snapshot. Events are removed about 1 hour after release. Use More dates below to open the expanded ForexFactory calendar.</div>';
+    renderTotalPulse();
+    return true;
+  }
+  calendarEvents.slice(0, 18).forEach(event => {
     const key = event.time_utc
       ? formatter(SINGAPORE_TZ, { year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(event.time_utc))
       : "TBC";
@@ -917,25 +1080,13 @@ function renderCalendar(payload) {
 
 function renderNews(payload) {
   const status = $("#newsStatus");
-  if (!payload.ok || !payload.items?.length) {
-    if (!WIDGETS_DISABLED) {
-      status.className = "source-status delayed";
-      status.textContent = "LIVE WIDGET";
-      status.title = "Parsed headline feed is unavailable; a live TradingView headline widget is loaded temporarily.";
-      setHealth("news", "delayed", "Widget", { summary: "News: live widget", detail: status.title });
-      $("#newsFreshnessNote").textContent = "Live backup widget - source attribution shown per story";
-      mountWidget($("#newsList"), "embed-widget-timeline.js", {
-        feedMode: "symbol", symbol: "CAPITALCOM:US100", colorTheme: "dark",
-        isTransparent: true, displayMode: "regular", width: "100%", height: 385, locale: "en"
-      });
-    } else {
-      status.className = "source-status offline";
-      status.textContent = "UNAVAILABLE";
-      status.title = "News feed is unavailable.";
-      setHealth("news", "offline", "Unavailable", null);
-      $("#newsFreshnessNote").textContent = "News feed unavailable";
-      $("#newsList").innerHTML = '<div class="empty-feed">Live headlines could not be reached. LiqueDT will retry automatically; open the source link below for a direct check.</div>';
-    }
+  if (!payload?.ok || !payload.items?.length) {
+    status.className = "source-status offline";
+    status.textContent = "NO FEED";
+    status.title = "Parsed NASDAQ headline feed is unavailable. LiqueDT no longer switches this section to a TradingView widget.";
+    setHealth("news", "offline", "No feed", { summary: "News: parsed feed unavailable", detail: status.title });
+    $("#newsFreshnessNote").textContent = "Parsed NASDAQ news unavailable - refresh after the app or GitHub snapshot updates";
+    $("#newsList").innerHTML = '<div class="empty-feed">Parsed NASDAQ headlines could not be loaded. LiqueDT will retry automatically; use the source link below for a direct check.</div>';
     renderPulse(null);
     return false;
   }
@@ -997,11 +1148,11 @@ function renderCompanies(payload) {
   latestCompanies = payload.items;
   const backup = Boolean(payload.stale || payload.static_snapshot);
   const freshness = statusFreshness(payload, "Companies", { liveBadge: "NASDAQ LIVE", maxAgeMinutes: 1440 });
-  const sourceDate = sourceDateLabel(payload.as_of);
+  const sourceDate = nasdaqSourceDateLabel(payload.as_of);
   const checkedAt = firstTimestamp(payload.snapshot_generated_at, payload.snapshot_attempted_at, payload.updated_at);
   const checkedLabel = checkedAt ? ` - app checked ${sgtStamp(checkedAt)}` : "";
   status.className = `source-status ${backup ? "delayed" : "live"}`;
-  status.textContent = sourceDate ? `AS OF ${compactDateLabel(payload.as_of) || sourceDate}` : (backup ? freshness.badge : "NASDAQ LIVE");
+  status.textContent = sourceDate ? `AS OF ${sourceDate.toUpperCase()}` : (backup ? freshness.badge : "NASDAQ LIVE");
   status.title = sourceDate
     ? `${payload.source || "Official Nasdaq source"} list date ${sourceDate}.${checkedAt ? ` App snapshot checked ${sgtStamp(checkedAt)}.` : ""} If Nasdaq updates the source date, the next app/GitHub refresh will display the new date.`
     : freshness.detail;
@@ -1126,5 +1277,16 @@ function init() {
 }
 
 init();
+
+
+
+
+
+
+
+
+
+
+
 
 

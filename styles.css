@@ -159,6 +159,32 @@ main, footer { width: min(calc(100% - 48px), var(--max)); margin-inline: auto; }
 .section-heading h2, .panel-heading h2 { margin: 0; font-size: clamp(26px, 3vw, 40px); font-weight: 500; line-height: 1.05; letter-spacing: -.055em; }
 .section-heading > p { max-width: 420px; margin: 0; color: var(--muted); font-size: 10px; line-height: 1.65; text-align: right; }
 .section-heading.compact h2 { font-size: 28px; }
+.holiday-notice {
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: -10px 0 18px;
+  padding: 13px 16px;
+  color: #dce7f2;
+  background: linear-gradient(135deg, rgba(59,130,246,.08), rgba(255,255,255,.018));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.holiday-notice.hidden { display: none; }
+.holiday-notice-dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--acid);
+  box-shadow: 0 0 0 4px var(--acid-dim), 0 0 14px rgba(59,130,246,.35);
+}
+.holiday-notice.closed .holiday-notice-dot { background: var(--red); box-shadow: 0 0 0 4px rgba(240,121,113,.13), 0 0 14px rgba(240,121,113,.35); }
+.holiday-notice.early .holiday-notice-dot { background: #f5c26b; box-shadow: 0 0 0 4px rgba(245,194,107,.13), 0 0 14px rgba(245,194,107,.30); }
+.holiday-notice strong, .holiday-notice small { display: block; }
+.holiday-notice strong { font-size: 11px; font-weight: 650; letter-spacing: -.02em; }
+.holiday-notice small { margin-top: 4px; color: #9facbb; font: 400 8px/1.45 var(--mono); text-transform: uppercase; }
 .session-grid { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
 .status-window-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 18px 0 10px; color: var(--muted); }
 .status-window-heading .eyebrow { margin: 0; }
@@ -246,7 +272,7 @@ main, footer { width: min(calc(100% - 48px), var(--max)); margin-inline: auto; }
 .companies-footer { margin-top: 0; padding: 14px 20px; background: var(--ink-2); }
 
 .intel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; border-top: 1px solid var(--line); }
-.calendar-section { grid-template-columns: 1fr; }
+.calendar-section { grid-template-columns: minmax(0, 1.25fr) minmax(340px, .75fr); }
 .news-section { border-top: 1px solid var(--line); }
 .intel-panel { padding: 26px; }
 .panel-heading { min-height: 74px; display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: start; margin-bottom: 16px; }
@@ -271,6 +297,17 @@ main, footer { width: min(calc(100% - 48px), var(--max)); margin-inline: auto; }
 .impact { display: flex; align-items: center; gap: 5px; color: var(--muted); font: 400 7px/1 var(--mono); text-transform: uppercase; }
 .impact i { width: 6px; height: 6px; border-radius: 50%; background: var(--neutral-dot); }
 .impact.high i { background: var(--red); box-shadow: 0 0 8px rgba(240,121,113,.4); }
+.holiday-list { min-height: 385px; }
+.holiday-item { display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 17px 0; border-top: 1px solid var(--line); }
+.holiday-date strong, .holiday-date small { display: block; }
+.holiday-date strong { font: 500 12px/1 var(--mono); }
+.holiday-date small { margin-top: 5px; color: var(--muted); font: 400 7px/1 var(--mono); text-transform: uppercase; }
+.holiday-copy h3 { margin: 0; font-size: 11px; font-weight: 500; line-height: 1.4; }
+.holiday-copy p { margin: 5px 0 0; color: var(--muted); font: 400 8px/1.45 var(--mono); }
+.holiday-badge { justify-self: end; padding: 6px 8px; border-radius: 999px; color: #cbd5df; background: rgba(255,255,255,.055); font: 600 7px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+.holiday-badge.closed, .holiday-badge.today { color: #ffaaa4; background: rgba(240,121,113,.13); }
+.holiday-badge.early { color: #8fb5ff; background: var(--acid-dim); }
+.holiday-item.today { background: linear-gradient(90deg, rgba(240,121,113,.055), transparent 45%); }
 .news-item { display: grid; grid-template-columns: auto 1fr; gap: 13px; padding: 16px 0; border-top: 1px solid var(--line); text-decoration: none; }
 .news-item:hover h3 { color: var(--acid); }
 .news-effect { width: 62px; padding-top: 2px; color: var(--muted); font: 500 7px/1.25 var(--mono); text-transform: uppercase; }
@@ -288,6 +325,8 @@ main, footer { width: min(calc(100% - 48px), var(--max)); margin-inline: auto; }
 .panel-footer { display: flex; justify-content: space-between; gap: 14px; margin-top: 12px; padding-top: 15px; color: #738091; border-top: 1px solid var(--line); font: 400 7px/1 var(--mono); text-transform: uppercase; }
 .panel-footer span:first-child { min-width: 0; line-height: 1.55; }
 .panel-footer a { color: #b0bac5; text-decoration: none; }
+.footer-links { display: inline-flex; align-items: center; justify-content: flex-end; gap: 12px; white-space: nowrap; }
+.footer-links a { display: inline-flex; }
 .loading-row { min-height: 320px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--muted); text-align: center; }
 .loading-row span { width: 22px; height: 22px; border: 2px solid var(--line); border-top-color: var(--acid); border-radius: 50%; animation: spin .8s linear infinite; }
 .loading-row p { font: 400 8px/1.5 var(--mono); text-transform: uppercase; }
@@ -358,6 +397,7 @@ dialog p:not(.eyebrow) { color: #aab5c1; font-size: 11px; line-height: 1.75; }
   .session-card:last-child { border-bottom: 0; }
   .section-heading { align-items: flex-start; flex-direction: column; }
   .section-heading > p { text-align: left; }
+  .holiday-notice { margin-top: -6px; }
   .market-chart { height: 620px; min-height: 580px; }
   .mobile-nav {
     position: fixed;
@@ -379,6 +419,7 @@ dialog p:not(.eyebrow) { color: #aab5c1; font-size: 11px; line-height: 1.75; }
   .mobile-nav a { padding: 11px 4px; color: var(--muted); border-radius: 9px; font-size: 10px; font-weight: 600; text-align: center; text-decoration: none; }
   .mobile-nav a.active { color: var(--paper); background: rgba(59,130,246,.18); box-shadow: inset 0 0 0 1px rgba(59,130,246,.22); }
   .intel-grid { grid-template-columns: 1fr; }
+  .calendar-section { grid-template-columns: 1fr; }
   .principle-strip { flex-wrap: wrap; gap: 14px 22px; padding: 22px; }
   footer { grid-template-columns: 1fr 1fr; }
   footer p:first-of-type { display: none; }
@@ -420,6 +461,8 @@ dialog p:not(.eyebrow) { color: #aab5c1; font-size: 11px; line-height: 1.75; }
   .hero h1 { font-size: clamp(38px, 12vw, 52px); }
   .hero-lede { font-size: 12px; }
   .session-section, .market-section, .companies-section, .intel-grid, .news-section { padding: 48px 0; }
+  .holiday-notice { align-items: flex-start; padding: 12px; }
+  .holiday-notice small { font-size: 7px; line-height: 1.45; overflow-wrap: anywhere; }
   .session-card { grid-template-columns: auto 1fr; }
   .session-timer { grid-column: 2; text-align: left; }
   .chart-toolbar { align-items: flex-start; flex-direction: column; }
@@ -450,11 +493,14 @@ dialog p:not(.eyebrow) { color: #aab5c1; font-size: 11px; line-height: 1.75; }
   .pulse-topline .source-status, .panel-heading .source-status { margin-left: auto; text-align: right; }
   .panel-heading { gap: 12px; }
   .panel-footer { flex-direction: column; }
+  .footer-links { justify-content: flex-start; flex-wrap: wrap; white-space: normal; }
   .calendar-list, .news-list { min-height: 300px; }
   .news-list { grid-template-columns: 1fr; }
   .calendar-day-label { position: static; top: auto; z-index: 1; margin-top: 4px; padding-top: 12px; }
   .calendar-day-group:first-child .calendar-day-label { margin-top: 0; }
   .calendar-item { grid-template-columns: 50px minmax(0, 1fr); gap: 10px; align-items: start; }
+  .holiday-item { grid-template-columns: 50px minmax(0, 1fr); gap: 10px; align-items: start; }
+  .holiday-badge { grid-column: 2; justify-self: start; }
   .calendar-copy { min-width: 0; }
   .calendar-copy h3, .calendar-copy p { overflow-wrap: anywhere; }
   .calendar-item .impact { grid-column: 2; }
@@ -470,4 +516,6 @@ dialog p:not(.eyebrow) { color: #aab5c1; font-size: 11px; line-height: 1.75; }
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
   .quiet-button.loading svg, .loading-row span { animation: none !important; }
 }
+
+
 

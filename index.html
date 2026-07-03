@@ -10,17 +10,17 @@
   <meta name="description" content="LiqueDT is a live NASDAQ market context companion for sessions, related markets, economic events and news.">
   <title>LiqueDT &mdash; NASDAQ market context</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="favicon-32.png?v=1.0.25" type="image/png" sizes="32x32">
-  <link rel="shortcut icon" href="favicon.ico?v=1.0.25" type="image/x-icon">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1.0.25">
-  <link rel="stylesheet" href="styles.css?v=1.0.25">
+  <link rel="icon" href="favicon-32.png?v=1.0.34" type="image/png" sizes="32x32">
+  <link rel="shortcut icon" href="favicon.ico?v=1.0.34" type="image/x-icon">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1.0.34">
+  <link rel="stylesheet" href="styles.css?v=1.0.34">
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to market overview</a>
 
   <header class="app-header">
     <a class="brand" href="#overview" aria-label="LiqueDT home">
-      <img src="icon.svg?v=1.0.25" alt="" width="40" height="40">
+      <img src="icon.svg?v=1.0.34" alt="" width="40" height="40">
       <span><strong>LiqueDT<span>.</span></strong><small>NASDAQ CONTEXT</small></span>
     </a>
 
@@ -130,6 +130,10 @@
       <div class="section-heading compact">
         <div><p class="eyebrow">MARKET WINDOWS &middot; SGT</p><h2 id="sessionsTitle">Where liquidity is awake</h2></div>
         <p>Main sessions show the trading context windows. Status windows stay separate for low-liquidity, pause and early-reopen conditions.</p>
+      </div>
+      <div id="holidayNotice" class="holiday-notice hidden" aria-live="polite">
+        <span class="holiday-notice-dot"></span>
+        <div><strong id="holidayNoticeTitle">Checking holidays</strong><small id="holidayNoticeDetail">Nasdaq cash-market holiday status</small></div>
       </div>
       <div id="sessionGrid" class="session-grid main-session-grid">
         <article class="session-card" data-session="asia-overnight">
@@ -272,7 +276,17 @@
         <div id="calendarList" class="calendar-list" aria-live="polite">
           <div class="loading-row"><span></span><p>Looking for upcoming USD events&hellip;</p></div>
         </div>
-        <div class="panel-footer"><span id="calendarFreshnessNote">Filter: USD &middot; high &amp; medium impact</span><a href="https://www.forexfactory.com/calendar" target="_blank" rel="noreferrer">Full calendar &nearr;</a></div>
+        <div class="panel-footer"><span id="calendarFreshnessNote">Filter: USD &middot; high &amp; medium impact</span><span class="footer-links"><a href="https://www.forexfactory.com/calendar?week=this" target="_blank" rel="noreferrer">ForexFactory week &nearr;</a><a id="calendarMoreLink" href="https://www.forexfactory.com/calendar?week=next" target="_blank" rel="noreferrer">More dates &nearr;</a></span></div>
+      </article>
+      <article class="intel-panel holiday-panel">
+        <div class="panel-heading">
+          <div><p class="eyebrow">MARKET HOLIDAYS &middot; ET / SGT</p><h2>Nasdaq holiday calendar</h2></div>
+          <span id="holidayStatus" class="source-status waiting">CHECKING</span>
+        </div>
+        <div id="holidayList" class="holiday-list" aria-live="polite">
+          <div class="loading-row"><span></span><p>Building exchange holiday calendar&hellip;</p></div>
+        </div>
+        <div class="panel-footer"><span>Nasdaq cash-market closures and early closes; CFD hours may differ by broker</span><a href="https://www.nasdaqtrader.com/Trader.aspx?id=Calendar" target="_blank" rel="noreferrer">Nasdaq Trader calendar &nearr;</a></div>
       </article>
     </section>
 
@@ -299,7 +313,7 @@
   </main>
 
   <footer>
-    <a class="brand footer-brand" href="#overview"><img src="icon.svg?v=1.0.25" alt="" width="32" height="32"><strong>LiqueDT<span>.</span></strong></a>
+    <a class="brand footer-brand" href="#overview"><img src="icon.svg?v=1.0.34" alt="" width="32" height="32"><strong>LiqueDT<span>.</span></strong></a>
     <p>Liquidity context for NASDAQ</p>
     <p>Market hours are indicative and can vary by broker and holiday.</p>
   </footer>
@@ -335,7 +349,20 @@
   </dialog>
 
   <noscript><div class="noscript">LiqueDT needs JavaScript for live clocks, data and charts.</div></noscript>
-  <script src="app.js?v=1.0.25" defer></script>
+  <script src="app.js?v=1.0.34" defer></script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
+
+
 

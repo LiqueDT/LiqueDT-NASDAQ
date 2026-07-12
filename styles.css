@@ -21,6 +21,7 @@
 
 * { box-sizing: border-box; }
 html { max-width: 100%; overflow-x: clip; scroll-behavior: smooth; scroll-padding-top: 120px; }
+html, body { touch-action: pan-x pan-y; }
 body {
   margin: 0;
   max-width: 100%;
@@ -37,6 +38,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 button, input, select { font: inherit; }
 button { color: inherit; }
 a { color: inherit; }
+.hidden { display: none !important; }
 
 .skip-link { position: fixed; left: 16px; top: -80px; z-index: 100; padding: 10px 14px; color: var(--ink); background: var(--acid); border-radius: 8px; text-decoration: none; }
 .skip-link:focus { top: 12px; }
@@ -116,6 +118,8 @@ a { color: inherit; }
 .health-item strong.offline { color: #f59b94; }
 .health-item strong.checking { color: var(--muted); }
 .data-health .quiet-button { flex: 0 0 auto; }
+.snapshot-build-button { border-color: rgba(59,130,246,.28); background: rgba(59,130,246,.07); }
+.snapshot-build-button:hover { border-color: rgba(59,130,246,.42); background: rgba(59,130,246,.12); }
 
 main, footer { width: min(calc(100% - 48px), var(--max)); margin-inline: auto; }
 .hero { min-height: 520px; display: grid; grid-template-columns: .62fr 1.38fr; align-items: center; gap: clamp(35px, 5vw, 80px); padding: 52px 0 58px; border-bottom: 1px solid var(--line); }
@@ -455,6 +459,8 @@ dialog p:not(.eyebrow) { color: #aab5c1; font-size: 11px; line-height: 1.75; }
   .health-item strong { max-width: 100%; overflow: hidden; font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
   .health-item.last-check { display: flex; }
   .data-health .quiet-button { grid-row: 1; grid-column: 9 / 11; align-self: center; justify-self: end; padding: 9px; font-size: 0; }
+  .data-health .snapshot-build-button:not(.hidden) { grid-row: 3; grid-column: 1 / 11; justify-self: stretch; justify-content: center; padding: 8px 10px; font-size: 8px; }
+  .data-health .snapshot-build-button:not(.hidden) span { display: inline; }
   .data-health .quiet-button svg { width: 15px; height: 15px; }
   .hero { padding: 44px 0; }
   .source-pulse-grid { grid-template-columns: 1fr; }

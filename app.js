@@ -25,10 +25,10 @@ const widgetSymbols = {
   "CAPITALCOM:US100": { name: "NAS100 / Nasdaq 100 Spot CFD", tag: "PRIMARY NAS100 SPOT CFD" },
   "CAPITALCOM:US500": { name: "US500 / S&P 500 Cash CFD", tag: "US500 / BROAD RISK CONFIRMATION" },
   "CAPITALCOM:US30": { name: "US30 / Dow Cash CFD", tag: "US30 / BROADER SENTIMENT" },
-  "TVC:US10Y": { name: "U.S. 10Y Treasury Yield", tag: "DURATION / RATES Â· TV CHART USB10YUSD PROXY", interval: "D", range: "12M", chartSymbol: "OANDA:USB10YUSD" },
-  "CBOE:VXN": { name: "Nasdaq-100 Volatility Index", tag: "NASDAQ-SPECIFIC FEAR Â· TV CHART VIXY", interval: "D", range: "12M", chartSymbol: "CBOE:VIXY" },
-  "NASDAQ:SOX": { name: "PHLX Semiconductor Index", tag: "CHIP / AI LEADERSHIP Â· TV CHART SOXX", interval: "D", range: "12M", chartSymbol: "NASDAQ:SOXX" },
-  "TVC:DXY": { name: "U.S. Dollar Index", tag: "GLOBAL FX CONDITIONS Â· TV CHART CAPITALCOM:DXY", interval: "D", range: "12M", chartSymbol: "CAPITALCOM:DXY" }
+  "TVC:US10Y": { name: "U.S. 10Y Treasury Yield", tag: "DURATION / RATES · TV CHART USB10YUSD PROXY", interval: "D", range: "12M", chartSymbol: "OANDA:USB10YUSD" },
+  "CBOE:VXN": { name: "Nasdaq-100 Volatility Index", tag: "NASDAQ-SPECIFIC FEAR · TV CHART VIXY", interval: "D", range: "12M", chartSymbol: "CBOE:VIXY" },
+  "NASDAQ:SOX": { name: "PHLX Semiconductor Index", tag: "CHIP / AI LEADERSHIP · TV CHART SOXX", interval: "D", range: "12M", chartSymbol: "NASDAQ:SOXX" },
+  "TVC:DXY": { name: "U.S. Dollar Index", tag: "GLOBAL FX CONDITIONS · TV CHART CAPITALCOM:DXY", interval: "D", range: "12M", chartSymbol: "CAPITALCOM:DXY" }
 };
 
 const tickerDefinitions = [
@@ -665,7 +665,52 @@ async function fetchStaticStatus() {
 function renderStaticStatus(payload) {
   if (!payload?.snapshot_generated_at && !payload?.updated_at) return;
   latestStaticBuild = payload;
+  document.body.classList.add("static-snapshot-mode");
   renderHealthSummary();
+}
+
+function githubActionsWorkflowUrl() {
+  const host = location.hostname.toLowerCase();
+  if (!host.endsWith(".github.io")) return "";
+  const owner = host.replace(".github.io", "");
+  const repo = location.pathname.split("/").filter(Boolean)[0];
+  if (!owner || !repo) return "";
+  return `https://github.com/${owner}/${repo}/actions/workflows/pages.yml`;
+}
+
+function configureSnapshotControls() {
+  const refreshButton = $("#refreshData");
+  const buildButton = $("#runSnapshotBuild");
+  const workflowUrl = githubActionsWorkflowUrl();
+  if (refreshButton) {
+    refreshButton.title = "Reloads the latest deployed snapshot files with cache-busting. If GitHub Actions has not rebuilt yet, the timestamp will stay the same.";
+  }
+  if (!buildButton) return;
+  if (!workflowUrl) {
+    buildButton.classList.add("hidden");
+    return;
+  }
+  buildButton.classList.remove("hidden");
+  buildButton.title = "Opens the GitHub Actions workflow. Repository owners can press Run workflow there to rebuild and deploy fresh snapshots.";
+  buildButton.addEventListener("click", () => {
+    window.open(workflowUrl, "_blank", "noopener,noreferrer");
+  });
+}
+
+function preventMobileZoom() {
+  const block = event => event.preventDefault();
+  ["gesturestart", "gesturechange", "gestureend"].forEach(type => {
+    document.addEventListener(type, block, { passive: false });
+  });
+  document.addEventListener("touchmove", event => {
+    if (event.touches && event.touches.length > 1) event.preventDefault();
+  }, { passive: false });
+  let lastTouchEnd = 0;
+  document.addEventListener("touchend", event => {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 300) event.preventDefault();
+    lastTouchEnd = now;
+  }, { passive: false });
 }
 
 function relativeTime(value) {
@@ -1237,6 +1282,7 @@ function bindNavigation() {
 }
 
 function bindEvents() {
+  configureSnapshotControls();
   $("#refreshData").addEventListener("click", refreshData);
   $("#methodButton").addEventListener("click", () => $("#methodDialog").showModal());
   $("#feedbackButton").addEventListener("click", () => $("#feedbackDialog").showModal());
@@ -1257,6 +1303,7 @@ function bindEvents() {
 }
 
 function init() {
+  preventMobileZoom();
   updateClocks();
   setInterval(updateClocks, 1000);
   if (WIDGETS_DISABLED) {

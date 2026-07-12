@@ -4,10 +4,14 @@ on:
   push:
     branches: [main]
   schedule:
-    # Offset away from :00/:05/:10 because GitHub's scheduled queue is busiest at exact 5-minute boundaries.
-    # update
-    - cron: "2/5 * * * *"
+    # Explicit 5-minute cadence, offset away from :00/:05/:10 because GitHub's scheduled queue is busiest there.
+    - cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"
   workflow_dispatch:
+    inputs:
+      reason:
+        description: "Reason for manual snapshot refresh"
+        required: false
+        default: "Manual LiqueDT snapshot refresh"
 
 permissions:
   contents: read
@@ -16,7 +20,7 @@ permissions:
 
 concurrency:
   group: pages-nasdaq
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build-and-deploy:

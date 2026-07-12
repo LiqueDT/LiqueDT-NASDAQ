@@ -669,32 +669,11 @@ function renderStaticStatus(payload) {
   renderHealthSummary();
 }
 
-function githubActionsWorkflowUrl() {
-  const host = location.hostname.toLowerCase();
-  if (!host.endsWith(".github.io")) return "";
-  const owner = host.replace(".github.io", "");
-  const repo = location.pathname.split("/").filter(Boolean)[0];
-  if (!owner || !repo) return "";
-  return `https://github.com/${owner}/${repo}/actions/workflows/pages.yml`;
-}
-
 function configureSnapshotControls() {
   const refreshButton = $("#refreshData");
-  const buildButton = $("#runSnapshotBuild");
-  const workflowUrl = githubActionsWorkflowUrl();
   if (refreshButton) {
-    refreshButton.title = "Reloads the latest deployed snapshot files with cache-busting. If GitHub Actions has not rebuilt yet, the timestamp will stay the same.";
+    refreshButton.title = "Reloads the latest deployed snapshot files with cache-busting. If the scheduled snapshot has not rebuilt yet, the timestamp will stay the same.";
   }
-  if (!buildButton) return;
-  if (!workflowUrl) {
-    buildButton.classList.add("hidden");
-    return;
-  }
-  buildButton.classList.remove("hidden");
-  buildButton.title = "Opens the GitHub Actions workflow. Repository owners can press Run workflow there to rebuild and deploy fresh snapshots.";
-  buildButton.addEventListener("click", () => {
-    window.open(workflowUrl, "_blank", "noopener,noreferrer");
-  });
 }
 
 function preventMobileZoom() {

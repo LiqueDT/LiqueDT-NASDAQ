@@ -1,4 +1,4 @@
-﻿"use strict";
+"use strict";
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -7,11 +7,15 @@ const formatterCache = new Map();
 
 const SESSION_TZ = SINGAPORE_TZ;
 const MARKET_TZ = "America/New_York";
+const LONDON_TZ = "Europe/London";
+// General underlying NQ futures reference, not a broker-specific spot-CFD schedule.
+// Cash-exchange holidays do not determine futures/CFD holiday trading hours.
+const CFD_SCHEDULE = { closeHour: 17, closeMinute: 0, reopenHour: 18, reopenMinute: 0 };
 
 const mainSessions = [
   { id: "asia-overnight", label: "Asia / overnight", note: "Range building, slower movement", tone: "range", kind: "main" },
-  { id: "europe-pre-market", label: "Europe pre-market", note: "Bias starts forming before U.S. cash open", tone: "bias", kind: "main" },
-  { id: "us-cash-session", label: "U.S. cash session", note: "Main NASDAQ liquidity", tone: "main", kind: "main" }
+  { id: "europe-pre-market", label: "London / pre-US cash", note: "London lead-in to U.S. cash open", tone: "bias", kind: "main" },
+  { id: "us-cash-session", label: "New York / cash", note: "Main NASDAQ liquidity", tone: "main", kind: "main" }
 ];
 
 const statusWindows = [
@@ -51,7 +55,11 @@ let latestNewsPulse = null;
 let latestCalendar = null;
 let latestCalendarPulse = null;
 let latestStaticBuild = null;
+let feedDeliveryMode = "checking";
+let needsDataRetry = false;
+let refreshBusy = false;
 let holidayRenderKey = "";
+let windowsCache = { key: "", windows: [] };
 const WIDGETS_DISABLED = new URLSearchParams(location.search).has("no-widgets");
 const healthState = { market: "checking", charts: "checking", calendar: "checking", news: "checking" };
 const healthMeta = { market: null, charts: null, calendar: null, news: null };
@@ -169,7 +177,9 @@ function nasdaqHolidayKeysForYear(year) {
   if (nasdaqHolidayCache.has(year)) return nasdaqHolidayCache.get(year);
   const keys = new Set();
   const add = parts => keys.add(ymd(parts));
-  add(observedFixedHoliday(year, 1, 1));
+  // Nasdaq does not observe a Saturday New Year's Day on the preceding Friday.
+  const newYear = calendarDate({ year, month: 1, day: 1 });
+  if (newYear.weekday !== 6) add(observedFixedHoliday(year, 1, 1));
   add(nthWeekdayOfMonth(year, 1, 1, 3));
   add(nthWeekdayOfMonth(year, 2, 1, 3));
   add(calendarDate(easterSunday(year), -2));
@@ -215,7 +225,7 @@ function sameYmd(a, b) {
 function nasdaqMarketHolidaysForYear(year) {
   const thanksgiving = nthWeekdayOfMonth(year, 11, 4, 4);
   const events = [
-    { name: "New Year's Day", type: "closed", parts: observedFixedHoliday(year, 1, 1) },
+    ...(calendarDate({ year, month: 1, day: 1 }).weekday === 6 ? [] : [{ name: "New Year's Day", type: "closed", parts: observedFixedHoliday(year, 1, 1) }]),
     { name: "Martin Luther King Jr. Day", type: "closed", parts: nthWeekdayOfMonth(year, 1, 1, 3) },
     { name: "Presidents' Day", type: "closed", parts: nthWeekdayOfMonth(year, 2, 1, 3) },
     { name: "Good Friday", type: "closed", parts: calendarDate(easterSunday(year), -2) },
@@ -240,6 +250,76 @@ function holidayWindow(event) {
   const normalClose = nyDateTime(event.parts, 16, 0);
   const earlyClose = event.type === "early" ? nyDateTime(event.parts, event.closeHour || 13, 0) : null;
   return { cashOpen, normalClose, earlyClose, start: event.type === "early" ? earlyClose : cashOpen, end: normalClose };
+}
+
+function bankHolidaysForYear(year) {
+  const sundayObserved = (month, day) => {
+    const parts = calendarDate({ year, month, day });
+    return parts.weekday === 0 ? calendarDate(parts, 1) : parts;
+  };
+  const us = [
+    ["New Year's Day", sundayObserved(1, 1)],
+    ["Martin Luther King Jr. Day", nthWeekdayOfMonth(year, 1, 1, 3)],
+    ["Presidents' Day", nthWeekdayOfMonth(year, 2, 1, 3)],
+    ["Memorial Day", lastWeekdayOfMonth(year, 5, 1)],
+    ["Juneteenth", sundayObserved(6, 19)],
+    ["Independence Day", sundayObserved(7, 4)],
+    ["Labor Day", nthWeekdayOfMonth(year, 9, 1, 1)],
+    ["Columbus Day / Indigenous Peoples' Day", nthWeekdayOfMonth(year, 10, 1, 2)],
+    ["Veterans Day", sundayObserved(11, 11)],
+    ["Thanksgiving Day", nthWeekdayOfMonth(year, 11, 4, 4)],
+    ["Christmas Day", sundayObserved(12, 25)]
+  ];
+  const ukObserved = (month, day, occupied = new Set()) => {
+    let parts = calendarDate({ year, month, day });
+    while (!isWeekday(parts) || occupied.has(ymd(parts))) parts = calendarDate(parts, 1);
+    occupied.add(ymd(parts));
+    return parts;
+  };
+  const christmasDates = new Set();
+  // Reserve weekday dates before assigning substitutes (e.g. Boxing Day Monday).
+  [25, 26].forEach(day => {
+    const parts = calendarDate({ year, month: 12, day });
+    if (isWeekday(parts)) christmasDates.add(ymd(parts));
+  });
+  const christmas = calendarDate({ year, month: 12, day: 25 });
+  const boxing = calendarDate({ year, month: 12, day: 26 });
+  const uk = [
+    ["New Year's Day", ukObserved(1, 1)],
+    ["Good Friday", calendarDate(easterSunday(year), -2)],
+    ["Easter Monday", calendarDate(easterSunday(year), 1)],
+    ["Early May bank holiday", nthWeekdayOfMonth(year, 5, 1, 1)],
+    ["Spring bank holiday", lastWeekdayOfMonth(year, 5, 1)],
+    ["Summer bank holiday", lastWeekdayOfMonth(year, 8, 1)],
+    ["Christmas Day", isWeekday(christmas) ? christmas : ukObserved(12, 25, christmasDates)],
+    ["Boxing Day", isWeekday(boxing) ? boxing : ukObserved(12, 26, christmasDates)]
+  ];
+  return [
+    ...us.map(([name, parts]) => ({ name, parts, type: "bank", region: "US", zone: MARKET_TZ })),
+    ...uk.map(([name, parts]) => ({ name, parts, type: "bank", region: "UK", zone: LONDON_TZ }))
+  ];
+}
+
+function isLondonBankHoliday(parts) {
+  return bankHolidaysForYear(parts.year).some(event => event.region === "UK" && sameYmd(parts, event.parts));
+}
+
+function bankHolidayWindow(event) {
+  const start = zonedDateTimeToUtc(event.parts.year, event.parts.month, event.parts.day, 0, 0, event.zone);
+  const next = calendarDate(event.parts, 1);
+  const end = zonedDateTimeToUtc(next.year, next.month, next.day, 0, 0, event.zone);
+  return { ...event, start, end, cashOpen: start, key: `${ymd(event.parts)}-${event.region}-bank-${event.name}` };
+}
+
+function upcomingMarketAndBankHolidays(now = new Date(), limit = 16) {
+  const year = zonedParts(now, MARKET_TZ).year;
+  const banks = [year - 1, year, year + 1].flatMap(bankHolidaysForYear).map(bankHolidayWindow)
+    .filter(event => event.end > now);
+  const exchange = upcomingNasdaqHolidays(now, 24);
+  const combined = exchange.map(event => ({ ...event, bankHoliday: banks.some(bank => bank.region === "US" && sameYmd(bank.parts, event.parts)) }));
+  // One US date can be both a cash closure and a banking holiday: show one row.
+  const additionalBanks = banks.filter(bank => bank.region !== "US" || !exchange.some(event => event.type === "closed" && sameYmd(event.parts, bank.parts)));
+  return [...combined, ...additionalBanks].sort((a, b) => a.start - b.start).slice(0, limit);
 }
 
 function upcomingNasdaqHolidays(now = new Date(), limit = 8) {
@@ -273,6 +353,9 @@ function holidayEtLabel(event) {
 }
 
 function holidayState(event, now = new Date()) {
+  if (event.type === "bank") {
+    return event.start <= now && now < event.end ? "today" : "upcoming";
+  }
   const nyNow = zonedParts(now, MARKET_TZ);
   if (sameYmd(event.parts, nyNow)) return "today";
   if (event.start <= now && now < event.end) return "active";
@@ -296,7 +379,8 @@ function holidayNoticeInfo(now = new Date()) {
     const detail = `${soon.name}: ${holidaySgtLabel(soon)} · ${holidayEtLabel(soon)}`;
     return { tone: soon.type === "early" ? "early" : "upcoming", title, detail };
   }
-  return null;
+  const bank = upcomingMarketAndBankHolidays(now).find(event => event.type === "bank" && holidayState(event, now) === "today");
+  return bank ? { tone: "upcoming", title: `${bank.region} bank holiday today`, detail: `${bank.name}. ${bank.region === "UK" ? "London participation may be lower; Nasdaq follows its U.S. calendar." : "U.S. banking/settlement holiday; Nasdaq cash closes only on exchange holidays."}` } : null;
 }
 
 function renderHolidayNotice(now = new Date()) {
@@ -316,7 +400,7 @@ function renderHolidayCalendar() {
   const status = $("#holidayStatus");
   if (!list || !status) return;
   const now = new Date();
-  const events = upcomingNasdaqHolidays(now, 8);
+  const events = upcomingMarketAndBankHolidays(now);
   if (!events.length) {
     status.className = "source-status delayed";
     status.textContent = "NO UPCOMING";
@@ -329,17 +413,37 @@ function renderHolidayCalendar() {
   const renderKey = events.map(event => `${event.key}:${holidayState(event, now)}`).join("|");
   if (renderKey === holidayRenderKey) return;
   holidayRenderKey = renderKey;
-  list.innerHTML = events.map(event => {
+  const renderEvent = event => {
     const state = holidayState(event, now);
-    const badge = state === "today" ? "TODAY" : event.type === "early" ? "EARLY CLOSE" : "CLOSED";
+    const badge = event.type === "bank" ? `${event.region} BANK${state === "today" ? " · TODAY" : ""}` : event.bankHoliday && event.type === "closed" ? `CASH + US BANK${state === "today" ? " · TODAY" : ""}` : state === "today" ? "TODAY" : event.type === "early" ? "EARLY CLOSE" : "CLOSED";
+    if (event.type === "bank") {
+      const date = formatter(event.zone, { weekday: "short", day: "2-digit", month: "short", year: "numeric" }).format(event.start);
+      const note = event.region === "UK" ? "England & Wales bank holiday; London participation may be lower. Nasdaq follows its U.S. exchange calendar." : "Federal Reserve bank holiday; Nasdaq can remain open. Banking and settlement availability may be reduced.";
+      return `<article class="holiday-item bank ${escapeHtml(state)}"><div class="holiday-date"><strong>${escapeHtml(formatter(event.zone, { day: "2-digit", month: "short" }).format(event.start))}</strong><small>${escapeHtml(event.region)}</small></div><div class="holiday-copy"><h5>${escapeHtml(event.name)}</h5><p>${escapeHtml(date)} · ${escapeHtml(event.region)} local date</p><p>${escapeHtml(note)}</p></div><span class="holiday-badge">${escapeHtml(badge)}</span></article>`;
+    }
     const note = event.type === "early"
       ? "Nasdaq cash market closes at 1:00 p.m. ET; liquidity usually thins after the early close."
       : "Nasdaq cash market is closed; NAS100 CFD availability can still vary by broker.";
     return `<article class="holiday-item ${escapeHtml(event.type)} ${escapeHtml(state)}">
       <div class="holiday-date"><strong>${escapeHtml(formatter(SESSION_TZ, { day: "2-digit", month: "short" }).format(event.cashOpen))}</strong><small>SGT</small></div>
-      <div class="holiday-copy"><h3>${escapeHtml(event.name)}</h3><p>${escapeHtml(holidaySgtLabel(event))}</p><p>${escapeHtml(holidayEtLabel(event))} · ${escapeHtml(note)}</p></div>
+      <div class="holiday-copy"><h5>${escapeHtml(event.name)}</h5><p>${escapeHtml(holidaySgtLabel(event))}</p><p>${escapeHtml(holidayEtLabel(event))} · ${escapeHtml(note)}</p></div>
       <span class="holiday-badge ${escapeHtml(event.type)} ${escapeHtml(state)}">${escapeHtml(badge)}</span>
     </article>`;
+  };
+  const years = new Map();
+  events.forEach(event => {
+    const { year, month } = event.parts;
+    if (!years.has(year)) years.set(year, new Map());
+    const months = years.get(year);
+    if (!months.has(month)) months.set(month, []);
+    months.get(month).push(event);
+  });
+  list.innerHTML = [...years].map(([year, months]) => {
+    const monthGroups = [...months].map(([month, items]) => {
+      const monthName = formatter("UTC", { month: "long" }).format(new Date(Date.UTC(year, month - 1, 1)));
+      return `<section class="holiday-month-group" aria-label="${escapeHtml(monthName)} ${year}"><h4 class="holiday-month-label">${escapeHtml(monthName)}</h4>${items.map(renderEvent).join("")}</section>`;
+    }).join("");
+    return `<section class="holiday-year-group" aria-label="Holidays in ${year}"><h3 class="holiday-year-label">${year}</h3>${monthGroups}</section>`;
   }).join("");
 }
 function nyDateTime(parts, hour, minute = 0) {
@@ -369,28 +473,38 @@ function attachWindowMeta(sessionId, start, end, meta = {}) {
 
 function buildWindows(now) {
   const sgtParts = zonedParts(now, SESSION_TZ);
+  const cacheKey = ymd(sgtParts);
+  if (windowsCache.key === cacheKey) return windowsCache.windows;
   const windows = [];
-  for (let offset = -3; offset <= 8; offset += 1) {
+  for (let offset = -3; offset <= 14; offset += 1) {
     const tradingDate = calendarDate(sgtParts, offset);
     if (!isCfdScheduleDate(tradingDate)) continue;
     const cashHoliday = isNasdaqHoliday(tradingDate);
     const asiaStart = sgtDateTime(tradingDate, 8, 0);
-    const europeStart = sgtDateTime(tradingDate, 15, 0);
+    const europeStart = zonedDateTimeToUtc(tradingDate.year, tradingDate.month, tradingDate.day, 8, 0, LONDON_TZ);
+    const londonHoliday = isLondonBankHoliday(tradingDate);
     const cashOpen = nyDateTime(tradingDate, 9, 30);
-    const cashClose = nyDateTime(tradingDate, 16, 0);
-    const afterClose = addMinutes(cashClose, 49);
-    const pauseEnd = nyDateTime(tradingDate, 18, 5);
-    const pauseEndSgtParts = zonedParts(pauseEnd, SESSION_TZ);
-    const asiaNextStart = sgtDateTime(pauseEndSgtParts, 8, 0);
-    const holidayMeta = { cashHoliday };
+    const earlyClose = nasdaqMarketHolidaysForYear(tradingDate.year).find(event => event.type === "early" && sameYmd(event.parts, tradingDate));
+    const cashClose = nyDateTime(tradingDate, earlyClose ? 13 : 16, 0);
+    const afterClose = nyDateTime(tradingDate, CFD_SCHEDULE.closeHour, CFD_SCHEDULE.closeMinute);
+    const holidayMeta = { cashHoliday, tradingDate, earlyClose: Boolean(earlyClose) };
+    // Each trading day starts with the preceding evening's reopen. Monday uses Sunday.
+    const previousDate = calendarDate(tradingDate, -1);
+    const reopen = nyDateTime(previousDate, CFD_SCHEDULE.reopenHour, CFD_SCHEDULE.reopenMinute);
+    windows.push(attachWindowMeta("early-cfd-reopen", reopen, asiaStart, holidayMeta));
     windows.push(attachWindowMeta("asia-overnight", asiaStart, europeStart, holidayMeta));
-    windows.push(attachWindowMeta("europe-pre-market", europeStart, cashOpen, holidayMeta));
-    windows.push(attachWindowMeta("us-cash-session", cashOpen, cashClose, holidayMeta));
+    windows.push(attachWindowMeta("europe-pre-market", europeStart, cashOpen, { ...holidayMeta, londonHoliday }));
+    if (!cashHoliday) windows.push(attachWindowMeta("us-cash-session", cashOpen, cashClose, holidayMeta));
+    else windows.push(attachWindowMeta("us-cash-session", cashOpen, cashClose, { ...holidayMeta, unavailable: true }));
     windows.push(attachWindowMeta("after-hours", cashClose, afterClose, holidayMeta));
-    windows.push(attachWindowMeta("daily-pause", afterClose, pauseEnd, holidayMeta));
-    windows.push(attachWindowMeta("early-cfd-reopen", pauseEnd, asiaNextStart, holidayMeta));
+    // Friday ends the trading week; there is no Saturday CFD reopen.
+    if (tradingDate.weekday !== 5) {
+      const pauseEnd = nyDateTime(tradingDate, CFD_SCHEDULE.reopenHour, CFD_SCHEDULE.reopenMinute);
+      windows.push(attachWindowMeta("daily-pause", afterClose, pauseEnd, holidayMeta));
+    }
   }
-  return windows.sort((a, b) => a.start - b.start);
+  windowsCache = { key: cacheKey, windows: windows.sort((a, b) => a.start - b.start) };
+  return windowsCache.windows;
 }
 
 function activeWindow(now) {
@@ -411,17 +525,17 @@ function sessionState(now, config) {
     const next = nextWindowAfterEnd(active);
     return {
       active: true,
-      open: active.tone !== "avoid",
+      open: active.tone !== "avoid" && !active.unavailable,
       tone: active.tone,
       target: active.end,
       openSg: sgtHourMinute(active.start),
       closeSg: sgtHourMinute(active.end),
       timeLabel: active.timeLabel,
-      statusText: active.tone === "avoid" ? "PAUSED NOW" : (active.cashHoliday ? "CFD ACTIVE" : "ACTIVE NOW"),
-      timerLabel: next ? `Until ${next.label}` : "Until next window"
+      statusText: active.unavailable ? "CASH CLOSED" : active.tone === "avoid" ? "PAUSED NOW" : (active.cashHoliday || (active.earlyClose && active.id === "after-hours") ? "HOURS UNCONFIRMED" : active.londonHoliday ? "UK BANK HOLIDAY" : "ACTIVE NOW"),
+      timerLabel: active.unavailable ? "Until normal cash close" : "Ends in"
     };
   }
-  const upcoming = nextWindowAfter(now, window => window.id === config.id);
+  const upcoming = nextWindowAfter(now, window => window.id === config.id && !window.unavailable);
   if (upcoming) {
     return {
       active: false,
@@ -440,27 +554,33 @@ function sessionState(now, config) {
 
 function closedMarketState(now) {
   const upcoming = nextWindowAfter(now);
-  const nyParts = zonedParts(now, MARKET_TZ);
-  const reason = nyParts.weekday === 0 || nyParts.weekday === 6 ? "Weekend" : (isNasdaqHoliday(nyParts) ? "Holiday" : "Between sessions");
+  const nyParts = calendarDate(zonedParts(now, MARKET_TZ));
+  const reason = [0, 5, 6].includes(nyParts.weekday) ? "Weekend" : (isNasdaqHoliday(nyParts) ? "Holiday" : "Between sessions");
   return {
     open: false,
     title: "Market closed",
     detail: reason,
     target: upcoming?.start || now,
-    label: upcoming ? `Until ${upcoming.label}` : "Until next session"
+    label: upcoming ? "Until CFD reopen" : "Until next session"
   };
 }
 
 function nasdaqMarketState(now) {
   const current = activeWindow(now);
   if (!current) return closedMarketState(now);
-  const next = nextWindowAfterEnd(current);
+  const pause = nextWindowAfter(now, window => window.id === "daily-pause");
+  const weeklyClose = buildWindows(now).find(window => window.id === "after-hours" && window.end > now && window.tradingDate.weekday === 5);
+  const stop = [pause?.start, weeklyClose?.end].filter(Boolean).sort((a, b) => a - b)[0];
+  const reopen = nextWindowAfter(now, window => window.id === "early-cfd-reopen");
+  const isPaused = current.tone === "avoid";
+  const cashClosed = current.unavailable;
+  const uncertainHolidayHours = current.cashHoliday || (current.earlyClose && current.id === "after-hours");
   return {
-    open: current.tone !== "avoid",
-    title: current.tone === "avoid" ? "Market paused" : (current.cashHoliday ? "CFD active" : "Market open"),
-    detail: current.cashHoliday && current.tone !== "avoid" ? `Cash holiday / ${current.label}` : current.label,
-    target: current.end,
-    label: next ? `Until ${next.label}` : "Until next session"
+    open: !isPaused && !uncertainHolidayHours,
+    title: isPaused ? "Reference paused" : cashClosed ? "Nasdaq cash closed" : uncertainHolidayHours ? "CFD hours unconfirmed" : current.id === "us-cash-session" ? "Nasdaq cash open" : "Reference open",
+    detail: current.cashHoliday ? `Cash holiday / ${current.label}` : current.londonHoliday ? "London / UK bank holiday" : current.label,
+    target: isPaused ? reopen?.start || current.end : uncertainHolidayHours ? current.end : stop || current.end,
+    label: isPaused ? "Until reference reopen" : uncertainHolidayHours ? "Until next window" : stop && weeklyClose && +stop === +weeklyClose.end ? "Until weekend close" : "Until daily pause"
   };
 }
 function updateClocks() {
@@ -472,6 +592,11 @@ function updateClocks() {
 
   renderHolidayCalendar();
   renderHolidayNotice(now);
+  const scheduleNote = $("#sessionScheduleNote");
+  if (scheduleNote) {
+    const zoneLabel = zone => formatter(zone, { timeZoneName: "short" }).formatToParts(now).find(part => part.type === "timeZoneName")?.value;
+    scheduleNote.textContent = `New York ${zoneLabel(MARKET_TZ)} · London ${zoneLabel(LONDON_TZ)} · All times SGT. Overnight status uses the NQ futures reference; spot-CFD and holiday hours vary by broker.`;
+  }
 
   const market = nasdaqMarketState(now);
   $("#marketState").textContent = market.title;
@@ -489,7 +614,8 @@ function updateClocks() {
     card.querySelector(".session-status").textContent = state.statusText || (state.open ? "OPEN NOW" : "CLOSED");
     card.querySelector(".session-timer strong").textContent = countdown(state.target - now);
     card.querySelector(".session-timer small").textContent = state.timerLabel || (state.open ? "Until close" : "Until open");
-    const holidayNote = state.active && activeWindow(now)?.cashHoliday && state.tone !== "avoid" ? "Cash holiday / CFD liquidity" : session.note;
+    const currentWindow = activeWindow(now);
+    const holidayNote = state.active && currentWindow?.cashHoliday && state.tone !== "avoid" ? "Nasdaq cash closed / CFD hours unconfirmed" : state.active && currentWindow?.londonHoliday ? "UK bank holiday / reduced London participation" : session.note;
     card.querySelector(".session-local-time")?.replaceChildren(`${state.timeLabel || `${state.openSg}-${state.closeSg}`} SGT | ${holidayNote}`);
   });
 }
@@ -665,15 +791,29 @@ async function fetchStaticStatus() {
 function renderStaticStatus(payload) {
   if (!payload?.snapshot_generated_at && !payload?.updated_at) return;
   latestStaticBuild = payload;
-  document.body.classList.add("static-snapshot-mode");
+  document.body.classList.toggle("static-snapshot-mode", feedDeliveryMode === "snapshot");
   renderHealthSummary();
 }
 
 function configureSnapshotControls() {
   const refreshButton = $("#refreshData");
   if (refreshButton) {
-    refreshButton.title = "Reloads the latest deployed snapshot files with cache-busting. If the scheduled snapshot has not rebuilt yet, the timestamp will stay the same.";
+    const snapshot = feedDeliveryMode === "snapshot";
+    refreshButton.hidden = !snapshot && !needsDataRetry;
+    refreshButton.querySelector("span").textContent = snapshot ? "Check updates" : "Retry data";
+    refreshButton.setAttribute("aria-label", snapshot ? "Check for a newer published snapshot" : "Retry unavailable or backup data feeds");
+    refreshButton.title = snapshot
+      ? "Checks the latest published snapshot without leaving the app. This does not start a build."
+      : "Retries the data sources. Healthy live data updates automatically.";
   }
+}
+
+function showRefreshFeedback(message) {
+  const feedback = $("#refreshFeedback");
+  if (!feedback) return;
+  feedback.textContent = message;
+  feedback.hidden = !message;
+  $(".data-health").classList.toggle("has-refresh-feedback", Boolean(message));
 }
 
 function preventMobileZoom() {
@@ -892,10 +1032,10 @@ function newsImpactLabel(item) {
 }
 
 function newsEstimateLine(item) {
-  const confidence = item.confidence_label || "low";
+  const strength = { high: "strong", medium: "moderate", low: "limited" }[item.confidence_label] || "limited";
   const reason = item.impact_reason || "headline language";
   const method = item.verified_article ? "article verified" : "headline estimate";
-  return `Estimated NASDAQ impact - ${confidence} confidence - ${reason} - ${method}`;
+  return `Estimated NASDAQ impact - ${reason} - ${strength} headline evidence - ${method}`;
 }
 
 function marketEffect(item) {
@@ -914,7 +1054,8 @@ function marketEffect(item) {
   if (item.id === "DXY") {
     if (read.key === "bullish") return "FX tailwind";
     if (read.key === "bearish") return "Dollar pressure";
-    return "FX link muted";
+    const relation = finiteNumber(item.effective_relation, null);
+    return relation === 0 ? "Weak correlation / effect muted" : "FX effect balanced";
   }
   if (item.id === "SOX") {
     if (read.key === "bullish") return "Chip / AI support";
@@ -1125,12 +1266,7 @@ function renderNews(payload) {
   status.textContent = freshness.badge;
   status.title = freshness.detail;
   setHealth("news", backup ? "delayed" : "live", freshness.health, freshness);
-  $("#newsFreshnessNote").textContent = `${freshness.footer} - source attribution shown per story`;
-  $("#newsList").innerHTML = payload.items.slice(0, 18).map(item => `<a class="news-item" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">
-    <span class="news-effect ${escapeHtml(item.impact)}">${escapeHtml(item.impact || "mixed")}</span>
-    <span class="news-copy"><h3>${escapeHtml(item.title)}</h3><p><span>${escapeHtml(item.source || "FXStreet")}</span><span>-</span><span>${escapeHtml(relativeTime(item.published))}</span></p></span>
-  </a>`).join("");
-  $("#newsFreshnessNote").textContent = `${freshness.footer} - NASDAQ impact is estimated from headline text and source context, not full-article verification`;
+  $("#newsFreshnessNote").textContent = `${freshness.footer} - NASDAQ subject/context filter; evidence strength describes the headline reading, not the probability of a future price move`;
   $("#newsList").innerHTML = payload.items.slice(0, 18).map(item => `<a class="news-item" href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">
     <span class="news-effect ${escapeHtml(item.impact)}"><small>EST.</small>${escapeHtml(item.impact || "mixed")}</span>
     <span class="news-copy"><h3>${escapeHtml(item.title)}</h3><p><span>${escapeHtml(item.source || "FXStreet")}</span><span>-</span><span>${escapeHtml(relativeTime(item.published))}</span></p><p class="news-estimate">${escapeHtml(newsEstimateLine(item))}</p></span>
@@ -1140,22 +1276,87 @@ function renderNews(payload) {
 }
 
 
+// Missing source values must remain unknown, never silently become zero.
+function companyNumber(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  const text = String(value ?? "").trim().replace(/\u2212/g, "-");
+  if (/^(UNCH|UNCHANGED)$/i.test(text)) return 0;
+  const match = text.match(/^\(?\s*([+-]?)\s*\$?\s*((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|\.\d+)\s*([KMBT]?)\s*%?\s*\)?$/i);
+  if (!match) return null;
+  const number = Number(match[2].replace(/,/g, "")) * ({ K: 1e3, M: 1e6, B: 1e9, T: 1e12 }[match[3].toUpperCase()] || 1);
+  return Number.isFinite(number) ? number * (match[1] === "-" || text.startsWith("(") ? -1 : 1) : null;
+}
+
+function companyIssuerName(name) {
+  return String(name || "").replace(/\s+(?:Class\s+[A-Z]\s+)?(?:Common Stock|Capital Stock|Ordinary Shares|Common Shares|American Depositary Shares|New York Registry Shares|Subordinate Voting Shares).*$/i, "")
+    .replace(/\s+Class\s+[A-Z]$/i, "").trim();
+}
+
+function companyRows(items, view = "companies") {
+  const unique = new Map();
+  for (const item of items) {
+    const symbol = String(item.symbol || "").trim().toUpperCase();
+    if (!symbol || unique.has(symbol)) continue;
+    const parsedCap = companyNumber(item.market_cap);
+    unique.set(symbol, { ...item, symbol, issuer: companyIssuerName(item.name) || symbol,
+      cap: parsedCap > 0 ? parsedCap : null, change: companyNumber(item.percent_change) });
+  }
+  const groups = new Map();
+  for (const item of unique.values()) {
+    const key = view === "listings" ? item.symbol : item.issuer.toLowerCase();
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  }
+  return [...groups.values()].map(classes => {
+    classes.sort((a, b) => (b.cap ?? -Infinity) - (a.cap ?? -Infinity) || a.symbol.localeCompare(b.symbol));
+    // Nasdaq quote caps can repeat issuer capitalisation across classes: never sum them.
+    const representative = classes[0];
+    return { ...representative, name: view === "companies" ? representative.issuer : representative.name,
+      classes, search: classes.map(item => `${item.symbol} ${item.name}`).join(" ").toLowerCase() };
+  });
+}
+
+function rankCompanies(rows, mode = "size") {
+  const metric = row => mode === "size" ? row.cap : mode === "movers" ? (row.change === null ? null : Math.abs(row.change)) : row.change;
+  return [...rows].sort((a, b) => {
+    const tie = a.name.localeCompare(b.name) || a.symbol.localeCompare(b.symbol);
+    if (mode === "name") return tie;
+    const av = metric(a), bv = metric(b);
+    if (av === null) return bv === null ? tie : 1;
+    if (bv === null) return -1;
+    return (mode === "losers" ? av - bv : bv - av) || tie;
+  }).map((row, index) => ({ ...row, displayRank: index + 1 }));
+}
+
+function companyCapLabel(value) {
+  if (value === null) return "Cap unavailable";
+  const unit = value >= 1e12 ? [1e12, "T"] : value >= 1e9 ? [1e9, "B"] : value >= 1e6 ? [1e6, "M"] : [1, ""];
+  return `$${(value / unit[0]).toLocaleString("en-US", { maximumFractionDigits: 2 })}${unit[1]} cap`;
+}
+
 function renderCompanyCards(items = latestCompanies) {
   const query = ($("#companySearch")?.value || "").trim().toLowerCase();
-  const filtered = query
-    ? items.filter(item => `${item.symbol || ""} ${item.name || ""}`.toLowerCase().includes(query))
-    : items;
-  const visible = filtered.slice(0, 120);
-  $("#companiesList").innerHTML = visible.map(item => {
-    const change = String(item.percent_change || item.net_change || "").trim();
-    const direction = change.startsWith("-") ? "down" : change.startsWith("+") ? "up" : "flat";
+  const mode = $("#companySort")?.value || "size";
+  const view = $("#companyView")?.value || "companies";
+  const rows = rankCompanies(companyRows(items, view), mode);
+  const filtered = rows.filter(item => !query || item.search.includes(query));
+  $("#companiesList").innerHTML = filtered.map(item => {
+    const direction = item.change === null || item.change === 0 ? "flat" : item.change > 0 ? "up" : "down";
+    const quotes = item.classes.map(share => `<span>${item.classes.length > 1 ? `${escapeHtml(share.symbol)} ` : ""}${escapeHtml(share.last_sale || "n/a")}</span><span class="company-change ${share.change === null || share.change === 0 ? "flat" : share.change > 0 ? "up" : "down"}">${share.change === null ? "Change unavailable" : `${share.change > 0 ? "+" : ""}${share.change.toFixed(2)}%`}</span>`).join("");
     return `<article class="company-card ${direction}">
-      <span class="company-rank">${escapeHtml(item.rank || "")}</span>
-      <div class="company-main"><strong>${escapeHtml(item.symbol || "--")}</strong><span>${escapeHtml(item.name || "Name unavailable")}</span></div>
-      <div class="company-meta"><span>${escapeHtml(item.last_sale || "n/a")}</span><span>${escapeHtml(item.percent_change || item.net_change || "n/a")}</span><span>${escapeHtml(item.market_cap || "n/a")}</span></div>
+      <span class="company-rank" title="Rank within selected view before search">${item.displayRank}</span>
+      <div class="company-main"><strong>${escapeHtml(item.classes.map(share => share.symbol).join(" / "))}</strong><span>${escapeHtml(item.name)}</span></div>
+      <div class="company-meta">${quotes}<span title="Source market cap; not index weight">${companyCapLabel(item.cap)}</span></div>
     </article>`;
   }).join("") || '<div class="empty-feed">No matching Nasdaq-100 constituent found.</div>';
-  $("#companiesCount").textContent = `${filtered.length} shown`;
+  $("#companiesCount").textContent = `${filtered.length} / ${rows.length} ${view === "companies" ? "companies" : "listings"}`;
+  const listings = companyRows(items, "listings");
+  const up = listings.filter(item => item.change > 0).length;
+  const down = listings.filter(item => item.change < 0).length;
+  const flat = listings.filter(item => item.change === 0).length;
+  const missing = listings.filter(item => item.change === null).length;
+  $("#companiesSummary").innerHTML = `<span>Listing breadth</span><span class="up">${up} rising</span><span class="down">${down} falling</span><span>${flat} unchanged</span>${missing ? `<span>${missing} unavailable</span>` : ""}`;
+  $("#companiesRankNote").textContent = `${mode === "size" ? "Ranked by source market cap, not official index weight or index contribution." : mode === "name" ? "Alphabetical company order." : "Ranked by the source's daily percentage change, not Nasdaq impact."} ${view === "companies" ? "Share classes are grouped; size and movement rank use the largest-cap class. Each class quote remains visible." : "Each share class is separate; market caps may repeat issuer size."} Missing values rank last. Search keeps the original ranks.`;
 }
 
 function renderCompanies(payload) {
@@ -1167,6 +1368,7 @@ function renderCompanies(payload) {
     $("#companiesCount").textContent = "No data";
     $("#companiesFreshnessNote").textContent = "Official Nasdaq constituent list unavailable right now";
     $("#companiesList").innerHTML = '<div class="empty-feed">Nasdaq-100 constituents could not be loaded. Try refresh again later.</div>';
+    $("#companiesSummary").textContent = "Listing breadth unavailable";
     return false;
   }
   latestCompanies = payload.items;
@@ -1220,26 +1422,59 @@ function updateFreshness(successCount) {
   renderHealthSummary();
 }
 
-async function refreshData() {
+async function refreshData({ manual = false } = {}) {
+  if (refreshBusy) return;
+  refreshBusy = true;
   const button = $("#refreshData");
+  const previousBuild = firstTimestamp(latestStaticBuild?.snapshot_generated_at, latestStaticBuild?.updated_at);
   button.classList.add("loading");
   button.disabled = true;
-  const [marketResult, calendarResult, newsResult, companiesResult, staticStatusResult] = await Promise.allSettled([
-    fetchJson("market"), fetchJson("calendar"), fetchJson("news"), fetchJson("companies"), fetchStaticStatus()
-  ]);
-  let successCount = 0;
-  if (marketResult.status === "fulfilled" && renderMarket(marketResult.value)) successCount += 1;
-  else renderMarket({ ok: false });
-  if (calendarResult.status === "fulfilled" && renderCalendar(calendarResult.value)) successCount += 1;
-  else renderCalendar({ ok: false });
-  if (newsResult.status === "fulfilled" && renderNews(newsResult.value)) successCount += 1;
-  else renderNews({ ok: false });
-  if (companiesResult.status === "fulfilled" && renderCompanies(companiesResult.value)) successCount += 1;
-  else renderCompanies({ ok: false });
-  if (staticStatusResult.status === "fulfilled") renderStaticStatus(staticStatusResult.value);
-  updateFreshness(successCount);
-  button.classList.remove("loading");
-  button.disabled = false;
+  button.setAttribute("aria-busy", "true");
+  if (manual) {
+    button.querySelector("span").textContent = "Checking...";
+    showRefreshFeedback("Checking for updated data...");
+  }
+  try {
+    const [marketResult, calendarResult, newsResult, companiesResult, staticStatusResult] = await Promise.allSettled([
+      fetchJson("market"), fetchJson("calendar"), fetchJson("news"), fetchJson("companies"), fetchStaticStatus()
+    ]);
+    let successCount = 0;
+    if (marketResult.status === "fulfilled" && renderMarket(marketResult.value)) successCount += 1;
+    else renderMarket({ ok: false });
+    if (calendarResult.status === "fulfilled" && renderCalendar(calendarResult.value)) successCount += 1;
+    else renderCalendar({ ok: false });
+    if (newsResult.status === "fulfilled" && renderNews(newsResult.value)) successCount += 1;
+    else renderNews({ ok: false });
+    if (companiesResult.status === "fulfilled" && renderCompanies(companiesResult.value)) successCount += 1;
+    else renderCompanies({ ok: false });
+    const feeds = [marketResult, calendarResult, newsResult, companiesResult];
+    const liveAvailable = feeds.some(result => result.status === "fulfilled" && result.value?.ok && !result.value.static_snapshot);
+    const failedFeeds = feeds.some(result => result.status !== "fulfilled" || !result.value?.ok);
+    feedDeliveryMode = liveAvailable ? "live" : "snapshot";
+    needsDataRetry = feeds.some(result => result.status !== "fulfilled" || !result.value?.ok || result.value.static_snapshot || result.value.stale);
+    if (staticStatusResult.status === "fulfilled") renderStaticStatus(staticStatusResult.value);
+    if (manual) {
+      if (successCount === 0) showRefreshFeedback("Data could not be checked. Please try again shortly.");
+      else if (failedFeeds) showRefreshFeedback("Some data could not be updated. Please try again shortly.");
+      else if (feedDeliveryMode === "snapshot") {
+        const build = staticStatusResult.status === "fulfilled"
+          ? firstTimestamp(staticStatusResult.value.snapshot_generated_at, staticStatusResult.value.updated_at) : null;
+        const newer = build && (!previousBuild || build > previousBuild);
+        const stamp = build ? ` Last built ${sgtStamp(build)}.` : "";
+        showRefreshFeedback(!build ? "Snapshot files checked. Build time is unavailable." : newer ? `A newer published snapshot is loaded.${stamp}` : `No newer snapshot is published yet.${stamp}`);
+      } else showRefreshFeedback(needsDataRetry ? "Data checked; some sources still need to recover." : "Live data checked. Automatic updates are running.");
+    }
+    updateFreshness(successCount);
+  } catch (error) {
+    needsDataRetry = true;
+    if (manual) showRefreshFeedback("Data could not be checked. Please try again shortly.");
+  } finally {
+    button.classList.remove("loading");
+    button.disabled = false;
+    button.setAttribute("aria-busy", "false");
+    refreshBusy = false;
+    configureSnapshotControls();
+  }
 }
 
 function bindNavigation() {
@@ -1262,7 +1497,7 @@ function bindNavigation() {
 
 function bindEvents() {
   configureSnapshotControls();
-  $("#refreshData").addEventListener("click", refreshData);
+  $("#refreshData").addEventListener("click", () => refreshData({ manual: true }));
   $("#methodButton").addEventListener("click", () => $("#methodDialog").showModal());
   $("#feedbackButton").addEventListener("click", () => $("#feedbackDialog").showModal());
   $$('[data-close-dialog]').forEach(button => button.addEventListener("click", () => $(`#${button.dataset.closeDialog}`).close()));
@@ -1272,6 +1507,8 @@ function bindEvents() {
     $("#markets").scrollIntoView({ behavior: "smooth" });
   }));
   $("#companySearch")?.addEventListener("input", () => renderCompanyCards());
+  $("#companySort")?.addEventListener("change", () => renderCompanyCards());
+  $("#companyView")?.addEventListener("change", () => renderCompanyCards());
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden && latestRefresh && Date.now() - latestRefresh > 300000) refreshData();
   });

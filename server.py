@@ -21,6 +21,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlparse
+from news_analysis import analyze as analyze_news_headline, select_and_summarize as summarize_news
 
 try:
     from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -47,30 +48,6 @@ FOREX_FACTORY_MORE_URL = "https://www.forexfactory.com/calendar?week=next"
 CALENDAR_READER_OFFSETS = (0, 1, 2)
 NASDAQ100_URL = "https://api.nasdaq.com/api/quote/list-type/nasdaq100"
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36 LiqueDT/1.7"
-DIRECT_MARKET_TERMS = (
-    "us100", "us 100", "u.s. tech 100", "nas100", "nasdaq futures", "e-mini nasdaq",
-    "nasdaq 100", "nasdaq-100", "nasdaq composite", "ndx", "qqq", "tech stocks",
-    "technology stocks", "growth stocks", "u.s. stocks", "us stocks", "wall street", "stock market",
-    "s&p 500", "sp 500", "dow", "dow jones",
-)
-MEGACAP_TERMS = (
-    "nvidia", "nvda", "apple", "aapl", "microsoft", "msft", "amazon", "amzn", "meta",
-    "alphabet", "google", "googl", "tesla", "tsla", "broadcom", "avgo", "micron", "amd",
-)
-SEMI_TERMS = ("chip", "chips", "semiconductor", "semiconductors", "sox", "ai stocks", "ai trade")
-MARKET_MOVING_TERMS = (
-    "rise", "rises", "rally", "rallies", "gain", "gains", "jump", "jumps", "soar", "soars",
-    "advance", "advances", "rebound", "rebounds", "fall", "falls", "drop", "drops", "slide", "slides",
-    "selloff", "sell-off", "rout", "crater", "slump", "tumble", "earnings", "guidance", "outlook",
-    "revenue", "profit", "forecast", "upside", "downgrade", "upgrade", "deal", "investment", "spending",
-    "antitrust", "tariff", "export controls", "ban", "probe", "warning", "demand", "orders",
-)
-MACRO_TERMS = (
-    "fed", "fomc", "powell", "u.s. treasury", "us treasury", "treasury yields", "bond yields",
-    "rate cut", "rate hike", "u.s. inflation", "us inflation", "u.s. cpi", "us cpi", "core cpi",
-    "core pce", "nonfarm payroll", "non-farm payroll", "u.s. jobs", "us jobs", "retail sales", "ism pmi",
-)
-POLICY_TERMS = ("trump", "white house", "china tech", "chip export", "export controls", "tech tariff", "antitrust")
 
 MARKET_SERIES = (
     {"id": "NDX", "ticker": "^NDX", "name": "NAS100 / Nasdaq 100", "relation": 1.0, "weight": 0.28, "move_scale": 1.25},
@@ -82,27 +59,6 @@ MARKET_SERIES = (
     {"id": "DXY", "ticker": "DX-Y.NYB", "name": "U.S. Dollar Index", "relation": -0.5, "weight": 0.05, "move_scale": 0.50},
 )
 
-BULLISH_PHRASES = {
-    "rate hike fears ease": 3, "rate hike odds fall": 3, "rate cut odds rise": 3, "rate cut bets grow": 3,
-    "dovish": 2, "lower yields": 2, "yields fall": 2, "yields drop": 2, "yields slide": 2,
-    "inflation cools": 2, "inflation eases": 2, "below forecast": 1, "soft landing": 1, "risk-on": 2,
-    "nasdaq rallies": 3, "nasdaq rises": 3, "nasdaq gains": 3, "nasdaq jumps": 3, "nasdaq rebounds": 3,
-    "tech stocks rise": 2, "tech stocks rally": 2, "stocks rise": 1, "stocks gain": 1,
-    "chip stocks rise": 2, "semiconductor stocks rise": 2, "ai rally": 2, "ai tailwind": 1,
-    "earnings beat": 2, "beats estimates": 2, "raises guidance": 2, "strong guidance": 2,
-    "soars": 2, "soar": 2, "jumps": 2, "jump": 2, "rebounds": 1, "rebound": 1, "upside": 1, "record high": 2, "all-time high": 2, "vxn falls": 2, "vxn drops": 2, "vix falls": 1, "upgraded": 1, "raises price target": 1, "strong demand": 1, "ai boom": 2, "data center demand": 2, "blockbuster earnings": 1,
-}
-BEARISH_PHRASES = {
-    "rate cut bets fade": -3, "rate cut odds fall": -3, "rate hike odds rise": -3, "rate hike bets grow": -3, "fed hike bets": -2,
-    "hawkish": -2, "higher yields": -2, "yields rise": -2, "yields climb": -2, "yields surge": -2,
-    "inflation hotter": -2, "inflation accelerates": -2, "above forecast": -1, "risk-off": -2,
-    "nasdaq falls": -3, "nasdaq drops": -3, "nasdaq retreats": -3, "nasdaq slides": -3,
-    "tech stocks fall": -2, "tech sell-off": -2, "tech selloff": -2, "stocks fall": -1, "stocks drop": -1,
-    "chip stocks fall": -2, "semiconductor selloff": -2, "ai rout": -2, "ai trade cools": -2,
-    "earnings miss": -2, "misses estimates": -2, "cuts guidance": -2, "weak guidance": -2,
-    "selloff": -2, "sell-off": -2, "rout": -2, "crater": -2, "slumps": -2, "tumbles": -2,
-    "downside": -1, "warning": -1, "vxn surges": -2, "vxn spikes": -2, "vix spikes": -1, "export controls": -1, "antitrust": -1, "downgraded": -1, "bubble": -1, "valuation concern": -1, "chip costs soar": -2, "costs soar": -2, "under pressure": -1, "doesn't inspire": -1, "don't inspire": -2, "do not inspire": -1, "rate hike penciled": -2, "hawkish fed outlook": -2, "playing defence": -1, "playing defense": -1,
-}
 
 
 @dataclass
@@ -306,120 +262,17 @@ def contains_any_term(value: str, terms: tuple[str, ...]) -> bool:
 
 
 def is_nasdaq_relevant(title: str) -> bool:
-    normalized = re.sub(r"\s+", " ", html.unescape(title).lower()).strip()
-    cleaned = re.sub(r"\((?:nasdaq|nyse|amex|otc):[^)]+\)", " ", normalized)
-    if contains_any_term(cleaned, DIRECT_MARKET_TERMS):
-        return True
-    if contains_any_term(cleaned, MACRO_TERMS) or contains_any_term(cleaned, POLICY_TERMS):
-        return True
-    has_mover = contains_any_term(cleaned, MARKET_MOVING_TERMS)
-    return has_mover and (contains_any_term(cleaned, MEGACAP_TERMS) or contains_any_term(cleaned, SEMI_TERMS))
+    return analyze_news_headline(title)["relevant"]
 
-
-def directional_matches(normalized: str) -> list[tuple[str, int]]:
-    candidates = sorted((*BULLISH_PHRASES.items(), *BEARISH_PHRASES.items()), key=lambda pair: len(pair[0]), reverse=True)
-    occupied: list[tuple[int, int]] = []
-    matches: list[tuple[str, int]] = []
-    for phrase, weight in candidates:
-        for found in re.finditer(re.escape(phrase), normalized):
-            span = found.span()
-            if any(span[0] < end and span[1] > start for start, end in occupied):
-                continue
-            occupied.append(span)
-            matches.append((phrase, weight))
-            break
-    return matches
-
-
-
-def contextual_headline_score(normalized: str) -> tuple[int, str] | None:
-    bearish_policy = ("tariff", "export controls", "antitrust", "probe", "ban", "china restrictions", "regulatory scrutiny")
-    bearish_risk = ("uncertainty", "fear", "risk-off", "sell pressure", "valuation concern", "bubble", "warning", "under pressure", "doesn't inspire", "don't inspire", "playing defence", "playing defense")
-    bullish_ai = ("ai spending", "ai demand", "data center demand", "ai boom", "chip demand", "investment plan", "strong demand")
-    bullish_risk = ("risk appetite", "soft landing", "growth optimism", "record close", "new high")
-    if any(term in normalized for term in bearish_policy):
-        return -1, "policy/regulatory pressure"
-    if any(term in normalized for term in bearish_risk):
-        return -1, "risk or valuation pressure"
-    if any(term in normalized for term in bullish_ai):
-        return 1, "AI/semiconductor demand support"
-    if any(term in normalized for term in bullish_risk):
-        return 1, "risk appetite support"
-    if "earnings" in normalized and any(term in normalized for term in ("preview", "ahead", "wait", "watch")):
-        return None
-    if any(term in normalized for term in ("nvidia", "microsoft", "apple", "amazon", "meta", "alphabet", "tesla")) and any(term in normalized for term in ("demand", "growth", "launch", "deal", "investment")):
-        return 1, "mega-cap growth support"
-    return None
 
 def headline_score(title: str) -> tuple[int, str, list[str], str, str, float]:
-    normalized = re.sub(r"\s+", " ", html.unescape(title).lower())
-    matches = directional_matches(normalized)
-    positive = sum(weight for _, weight in matches if weight > 0)
-    negative = sum(weight for _, weight in matches if weight < 0)
-    score = positive + negative
-    if positive and negative and abs(score) <= 1:
-        score = 0
-    factors: list[str] = []
-    if any(term in normalized for term in ("fed", "fomc", "rate", "yield", "treasury", "powell")):
-        factors.append("Rates")
-    if any(term in normalized for term in ("war", "risk", "geopolit", "conflict", "selloff", "sell-off", "rout", "vix", "vxn", "risk-off", "risk-on")):
-        factors.append("Risk")
-    if any(term in normalized for term in ("inflation", "cpi", "pce")):
-        factors.append("Inflation")
-    if any(term in normalized for term in ("ai", "chip", "semiconductor", "nvidia", "micron", "broadcom", "amd")):
-        factors.append("AI/Semis")
-    if any(term in normalized for term in ("earnings", "guidance", "apple", "microsoft", "amazon", "meta", "alphabet", "tesla")):
-        factors.append("Mega-cap earnings")
-    if any(term in normalized for term in ("tariff", "antitrust", "export controls", "china", "white house", "trump")):
-        factors.append("Policy")
-    contextual = contextual_headline_score(normalized) if score == 0 else None
-    if contextual:
-        score, contextual_reason = contextual
-        matches.append((contextual_reason, score))
-    impact = "bullish" if score > 0 else "bearish" if score < 0 else "mixed"
-    reason = headline_reason(normalized, score, factors, matches, positive, negative)
-    confidence = min(0.94, 0.26 + abs(score) * 0.20 + min(len(factors), 3) * 0.09)
-    if contextual and abs(score) == 1:
-        confidence = max(confidence, 0.48)
-    if score == 0:
-        confidence = min(confidence, 0.38)
-    confidence_label = "high" if confidence >= 0.70 else "medium" if confidence >= 0.46 else "low"
-    return score, impact, factors, reason, confidence_label, round(confidence, 2)
-
-
-def headline_reason(normalized: str, score: int, factors: list[str], matches: list[tuple[str, int]], positive: int, negative: int) -> str:
-    if positive and negative and score == 0:
-        return "conflicting bullish and bearish signals in the headline"
-    if not score:
-        return "no reliable Nasdaq direction detected from the headline alone"
-    if any(phrase in normalized for phrase in ("rate hike fears ease", "rate hike odds fall", "rate cut odds rise", "rate cut bets grow", "dovish", "lower yields", "yields fall", "yields drop", "yields slide")):
-        return "lower-rate/yield pressure language"
-    if any(phrase in normalized for phrase in ("rate cut bets fade", "rate cut odds fall", "rate hike odds rise", "rate hike bets grow", "fed hike bets", "hawkish", "higher yields", "yields rise", "yields climb", "yields surge")):
-        return "higher-rate/yield pressure language"
-    if any(phrase in normalized for phrase in ("ai rally", "ai tailwind", "chip stocks rise", "semiconductor stocks rise")):
-        return "AI/semiconductor leadership language"
-    if any(phrase in normalized for phrase in ("ai rout", "ai trade cools", "chip stocks fall", "semiconductor selloff", "crater")):
-        return "AI/semiconductor weakness language"
-    if any(phrase in normalized for phrase in ("earnings beat", "beats estimates", "raises guidance", "strong guidance")):
-        return "earnings/guidance support"
-    if any(phrase in normalized for phrase in ("earnings miss", "misses estimates", "cuts guidance", "weak guidance")):
-        return "earnings/guidance pressure"
-    if score > 0 and any(phrase in normalized for phrase in ("rall", "rise", "gain", "jump", "soar", "rebound", "upside", "record high")):
-        return "positive market or company price-action language"
-    if score < 0 and any(phrase in normalized for phrase in ("fall", "drop", "retreat", "slide", "selloff", "sell-off", "rout", "slump", "tumble", "warning")):
-        return "negative market or company price-action language"
-    if factors:
-        return f"{', '.join(factors[:2]).lower()} context"
-    strongest = sorted(matches, key=lambda item: abs(item[1]), reverse=True)
-    return strongest[0][0] if strongest else "headline language"
+    result = analyze_news_headline(title)
+    return (result["direction_score"], result["impact"], result["factors"],
+            result["impact_reason"], result["confidence_label"], result["confidence"])
 
 
 def load_news() -> dict[str, Any]:
-    items: list[dict[str, Any]] = []
-    total_score = 0
-    factors: dict[str, int] = {}
-    seen: set[str] = set()
-
+    candidates: list[dict[str, Any]] = []
     for feed_url, default_source in NEWS_FEEDS:
         try:
             root = ET.fromstring(fetch_bytes(feed_url))
@@ -428,75 +281,30 @@ def load_news() -> dict[str, Any]:
         for node in root.findall(".//item"):
             title = re.sub(r"\s+", " ", html.unescape(text_of(node, "title"))).strip()
             source = text_of(node, "source") or default_source
-            if source:
-                title = re.sub(rf"\s+-\s+{re.escape(source)}$", "", title, flags=re.IGNORECASE).strip()
-            title_key = re.sub(r"\s+-\s+[^-]{2,80}$", "", title).casefold()
-            if not title or title_key in seen or not is_nasdaq_relevant(title):
+            title = re.sub(rf"\s+-\s+{re.escape(source)}$", "", title, flags=re.IGNORECASE).strip()
+            if not title or len(title) > 600:
                 continue
-            seen.add(title_key)
-            score, impact, item_factors, reason, confidence_label, confidence = headline_score(title)
-            total_score += score
-            for factor in item_factors:
-                factors[factor] = factors.get(factor, 0) + 1
-            published_text = text_of(node, "pubDate")
+            analysis = analyze_news_headline(title)
+            if not analysis["relevant"]:
+                continue
             try:
-                published = parsedate_to_datetime(published_text)
+                published = parsedate_to_datetime(text_of(node, "pubDate"))
                 if published.tzinfo is None:
                     published = published.replace(tzinfo=timezone.utc)
                 published_iso = published.astimezone(timezone.utc).isoformat()
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, OverflowError):
                 published_iso = None
-            items.append({
-                "title": title,
-                "url": safe_external_url(text_of(node, "link"), "https://news.google.com/search?q=Nasdaq%20100%20OR%20NDX%20OR%20QQQ%20technology%20stocks"),
-                "source": source,
-                "published": published_iso,
-                "impact": impact,
-                "impact_label": f"estimated {impact}",
-                "impact_reason": reason,
-                "confidence": confidence,
-                "confidence_label": confidence_label,
-                "direction_score": score,
-                "factors": item_factors,
-                "verified_article": False,
-                "method": "headline estimate",
+            candidates.append({
+                **analysis, "title": title, "source": source, "published": published_iso,
+                "url": safe_external_url(text_of(node, "link"), "https://news.google.com/search?q=Nasdaq%20100%20news"),
+                "impact_label": f'estimated {analysis["impact"]}',
             })
-
-    items.sort(key=lambda item: item["published"] or "", reverse=True)
-    items = items[:18]
-
+    items, pulse = summarize_news(candidates)
     if not items:
-        raise ValueError("No relevant NASDAQ news items in upstream feed")
-
-    total_score = sum(int(item.get("direction_score", 0)) for item in items)
-    factors = {}
-    for item in items:
-        for factor in item.get("factors", []):
-            factors[factor] = factors.get(factor, 0) + 1
-    normalized_score = max(-1.0, min(1.0, total_score / max(4, len(items) * 1.5)))
-    if normalized_score >= 0.2:
-        title = "Headlines lean supportive for NASDAQ"
-        summary = "Recent coverage emphasizes language that can support Nasdaq risk appetite, but price may already reflect the narrative."
-    elif normalized_score <= -0.2:
-        title = "Headlines lean restrictive for NASDAQ"
-        summary = "Recent coverage emphasizes language that can pressure Nasdaq growth/risk appetite, though cross-market confirmation still matters."
-    else:
-        title = "The NASDAQ narrative is balanced"
-        summary = "Recent headlines contain mixed NASDAQ-sensitive language with no clear aggregate lean."
-
-    return {
-        "ok": True,
-        "source": "FXStreet + Yahoo Finance + attributable public news (Nasdaq filter)",
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-        "items": items,
-        "pulse": {
-            "score": round(normalized_score, 3),
-            "sample_size": len(items),
-            "title": title,
-            "summary": summary,
-            "factors": [name for name, _ in sorted(factors.items(), key=lambda pair: pair[1], reverse=True)][:4],
-        },
-    }
+        raise ValueError("No recent, dated Nasdaq-sensitive news in upstream feeds")
+    return {"ok": True, "source": "Attributed public feeds · Nasdaq subject/context filter",
+            "updated_at": datetime.now(timezone.utc).isoformat(), "items": items, "pulse": pulse,
+            "analysis_version": "nasdaq-headlines-2"}
 
 
 

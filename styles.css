@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   --ink: #0b1016;
   --ink-2: #10171f;
   --surface: #151d26;
@@ -131,6 +131,9 @@ main, footer { width: min(calc(100% - 48px), var(--max)); margin-inline: auto; }
 .quiet-button:hover { color: var(--paper); border-color: var(--line-strong); background: rgba(255,255,255,.04); }
 .quiet-button svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.6; }
 .quiet-button.loading svg { animation: spin .8s linear infinite; }
+#refreshData[hidden], .refresh-feedback[hidden] { display: none; }
+.data-health.has-refresh-feedback { flex-wrap: wrap; }
+.refresh-feedback { flex-basis: 100%; margin: 0; color: var(--muted); font: 400 9px/1.5 var(--mono); overflow-wrap: anywhere; }
 
 .pulse-card { position: relative; overflow: hidden; padding: 28px; background: linear-gradient(150deg, rgba(59,130,246,.10), rgba(255,255,255,.025) 55%); border: 1px solid var(--line); border-radius: var(--radius); }
 .pulse-card::after { content: ""; position: absolute; right: -75px; top: -80px; width: 190px; height: 190px; border: 1px solid rgba(105,185,255,.14); border-radius: 50%; }
@@ -259,8 +262,14 @@ main, footer { width: min(calc(100% - 48px), var(--max)); margin-inline: auto; }
 .companies-toolbar span:not(.source-status) { color: var(--paper); font: 600 10px/1 var(--mono); text-transform: uppercase; }
 .companies-toolbar small { color: var(--muted); font: 400 8px/1.4 var(--mono); text-transform: uppercase; }
 .companies-actions { display: flex; align-items: center; gap: 10px; }
-.companies-actions input { width: min(280px, 34vw); padding: 9px 11px; color: var(--paper); background: #0f161e; border: 1px solid var(--line); border-radius: 9px; outline: none; font: 500 9px/1 var(--mono); }
-.companies-actions input:focus { border-color: var(--acid); box-shadow: 0 0 0 3px var(--acid-dim); }
+.companies-controls { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(140px, .65fr) minmax(140px, .65fr); align-items: end; gap: 12px; padding: 16px 20px 10px; }
+.companies-controls label { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font: 500 8px/1.3 var(--mono); text-transform: uppercase; }
+.companies-controls input, .companies-controls select { width: 100%; min-width: 0; min-height: 38px; padding: 9px 11px; color: var(--paper); background: #0f161e; border: 1px solid var(--line); border-radius: 9px; outline: none; font: 500 10px/1.3 var(--mono); }
+.companies-controls input:focus-visible, .companies-controls select:focus-visible { border-color: var(--acid); box-shadow: 0 0 0 3px var(--acid-dim); }
+.companies-summary { display: flex; flex-wrap: wrap; gap: 8px 14px; padding: 8px 20px; color: var(--muted); font: 500 9px/1.4 var(--mono); }
+.companies-summary .up, .company-meta .company-change.up { color: var(--acid); }
+.companies-summary .down, .company-meta .company-change.down { color: var(--red); }
+.companies-rank-note { margin: 0; padding: 2px 20px 14px; color: var(--muted); font-size: 9px; line-height: 1.6; border-bottom: 1px solid var(--line); }
 .companies-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); max-height: 680px; overflow: auto; }
 .company-card { min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 10px; padding: 13px; background: var(--ink-2); }
 .company-rank { color: #596675; font: 500 8px/1 var(--mono); }
@@ -269,12 +278,13 @@ main, footer { width: min(calc(100% - 48px), var(--max)); margin-inline: auto; }
 .company-main span { min-height: 28px; color: #aab5c1; font-size: 9px; line-height: 1.45; }
 .company-meta { grid-column: 2; display: flex; flex-wrap: wrap; gap: 5px; }
 .company-meta span { padding: 4px 6px; color: var(--muted); background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.045); border-radius: 6px; font: 500 7px/1 var(--mono); }
-.company-card.up .company-meta span:nth-child(2) { color: var(--acid); }
-.company-card.down .company-meta span:nth-child(2) { color: var(--red); }
 .companies-footer { margin-top: 0; padding: 14px 20px; background: var(--ink-2); }
 
 .intel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; border-top: 1px solid var(--line); }
 .calendar-section { grid-template-columns: minmax(0, 1.25fr) minmax(340px, .75fr); }
+.calendar-section > .intel-panel { display: flex; flex-direction: column; min-width: 0; }
+.calendar-section .panel-heading, .calendar-section .panel-footer { flex-shrink: 0; }
+.calendar-section .calendar-list, .calendar-section .holiday-list { flex: 1; }
 .news-section { border-top: 1px solid var(--line); }
 .intel-panel { padding: 26px; }
 .panel-heading { min-height: 74px; display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: start; margin-bottom: 16px; }
@@ -300,11 +310,16 @@ main, footer { width: min(calc(100% - 48px), var(--max)); margin-inline: auto; }
 .impact i { width: 6px; height: 6px; border-radius: 50%; background: var(--neutral-dot); }
 .impact.high i { background: var(--red); box-shadow: 0 0 8px rgba(240,121,113,.4); }
 .holiday-list { min-height: 385px; }
+.holiday-year-group + .holiday-year-group { margin-top: 28px; }
+.holiday-year-label { margin: 0 0 15px; color: var(--paper); font: 600 16px/1.2 var(--mono); }
+.holiday-month-group + .holiday-month-group { margin-top: 16px; }
+.holiday-month-label { display: flex; align-items: center; gap: 12px; margin: 0; padding: 10px 0; color: #cbd5df; font: 600 9px/1.3 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.holiday-month-label::after { content: ""; height: 1px; flex: 1; background: var(--line-strong); }
 .holiday-item { display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 17px 0; border-top: 1px solid var(--line); }
 .holiday-date strong, .holiday-date small { display: block; }
 .holiday-date strong { font: 500 12px/1 var(--mono); }
 .holiday-date small { margin-top: 5px; color: var(--muted); font: 400 7px/1 var(--mono); text-transform: uppercase; }
-.holiday-copy h3 { margin: 0; font-size: 11px; font-weight: 500; line-height: 1.4; }
+.holiday-copy h5 { margin: 0; font-size: 11px; font-weight: 500; line-height: 1.4; }
 .holiday-copy p { margin: 5px 0 0; color: var(--muted); font: 400 8px/1.45 var(--mono); }
 .holiday-badge { justify-self: end; padding: 6px 8px; border-radius: 999px; color: #cbd5df; background: rgba(255,255,255,.055); font: 600 7px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
 .holiday-badge.closed, .holiday-badge.today { color: #ffaaa4; background: rgba(240,121,113,.13); }
@@ -458,6 +473,7 @@ dialog p:not(.eyebrow) { color: #aab5c1; font-size: 11px; line-height: 1.75; }
   .health-item.last-check { display: flex; }
   .data-health .quiet-button { grid-row: 1; grid-column: 9 / 11; align-self: center; justify-self: end; padding: 9px; font-size: 0; }
   .data-health .quiet-button svg { width: 15px; height: 15px; }
+  .refresh-feedback { grid-row: 3; grid-column: 1 / -1; font-size: 8px; }
   .hero { padding: 44px 0; }
   .source-pulse-grid { grid-template-columns: 1fr; }
   .hero h1 { font-size: clamp(38px, 12vw, 52px); }
@@ -477,6 +493,11 @@ dialog p:not(.eyebrow) { color: #aab5c1; font-size: 11px; line-height: 1.75; }
   .companies-toolbar { align-items: flex-start; flex-direction: column; }
   .companies-actions { width: 100%; display: grid; grid-template-columns: 1fr; align-items: stretch; gap: 9px; }
   .companies-actions input { width: 100%; min-width: 0; }
+  .companies-controls { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding: 12px 14px 6px; gap: 10px; }
+  .companies-controls input { grid-column: 1 / -1; }
+  .companies-controls input, .companies-controls select { font-size: 16px; min-height: 42px; padding: 8px; }
+  .companies-summary { padding: 8px 14px; gap: 6px 10px; font-size: 8px; }
+  .companies-rank-note { padding: 2px 14px 12px; font-size: 8px; }
   .companies-actions .source-status { width: max-content; max-width: 100%; justify-self: start; white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.25; }
   .companies-list { grid-template-columns: 1fr; max-height: 224px; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
   .company-card { padding: 8px 10px; gap: 5px 7px; }

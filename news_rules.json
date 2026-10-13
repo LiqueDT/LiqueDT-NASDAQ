@@ -1,0 +1,399 @@
+{
+  "version": "nasdaq-headlines-2",
+  "max_age_hours": 36,
+  "half_life_hours": 6,
+  "aliases": {
+    "index": [
+      "nasdaq",
+      "nasdaq-100",
+      "nasdaq 100",
+      "nas100",
+      "us100",
+      "ndx",
+      "qqq",
+      "tech stocks",
+      "technology stocks",
+      "growth stocks",
+      "tech shares",
+      "technology shares",
+      "chip stocks",
+      "chipmakers",
+      "semiconductor stocks",
+      "semiconductors",
+      "ai stocks",
+      "ai trade",
+      "memory stocks"
+    ],
+    "broad": [
+      "u.s. stocks",
+      "us stocks",
+      "u.s. equity futures",
+      "us equity futures",
+      "wall street",
+      "stock futures",
+      "s&p 500",
+      "s&p",
+      "dow jones",
+      "dow",
+      "stocks"
+    ],
+    "companies": [
+      "nvidia",
+      "nvda",
+      "apple",
+      "aapl",
+      "microsoft",
+      "msft",
+      "amazon",
+      "amzn",
+      "meta",
+      "alphabet",
+      "google",
+      "googl",
+      "tesla",
+      "tsla",
+      "broadcom",
+      "avgo",
+      "micron",
+      "amd",
+      "intel",
+      "intc",
+      "qualcomm",
+      "qcom",
+      "netflix",
+      "nflx",
+      "palantir",
+      "pltr",
+      "asml",
+      "applied materials",
+      "lam research",
+      "kla",
+      "texas instruments",
+      "adobe",
+      "salesforce",
+      "costco",
+      "walmart",
+      "arm holdings",
+      "sandisk",
+      "western digital",
+      "seagate",
+      "coreweave",
+      "lumentum",
+      "marvell",
+      "synopsys",
+      "cadence",
+      "shopify",
+      "crowdstrike",
+      "palo alto networks",
+      "fortinet",
+      "datadog",
+      "app lovin",
+      "applovin",
+      "sk hynix",
+      "tsmc",
+      "taiwan semiconductor"
+    ],
+    "macro": [
+      "federal reserve",
+      "fed",
+      "fomc",
+      "powell",
+      "warsh",
+      "treasury yields",
+      "bond yields",
+      "u.s. treasury",
+      "us treasury",
+      "cpi",
+      "pce",
+      "ppi",
+      "u.s. inflation",
+      "us inflation",
+      "u.s. jobs",
+      "us jobs",
+      "nonfarm payrolls",
+      "non-farm payrolls",
+      "retail sales",
+      "ism",
+      "jolts",
+      "rate cut",
+      "rate cuts",
+      "rate hike",
+      "rate hikes"
+    ],
+    "foreign_assets": [
+      "gold",
+      "silver",
+      "xau",
+      "xag",
+      "eur/usd",
+      "gbp/usd",
+      "aud/usd",
+      "usd/jpy",
+      "euro",
+      "pound",
+      "australian dollar",
+      "new zealand dollar",
+      "bitcoin",
+      "ethereum",
+      "xrp",
+      "crude",
+      "oil price"
+    ]
+  },
+  "noise": "\\b(?:ai-picked|visionary leadership|our top|top stocks|see q[1-4]'s lineup|see q[1-4]s lineup)\\b|\\b(?:coupon|discount code|prime day|best deals|buy now|off today|price prediction|price target 20\\d\\d|dividend calendar|insider sale|insider purchase|stock market.*(?:up or down|open up or down)|earnings conference call transcript|transcript|nasdaq,? inc|exchange operator)\\b|\\b(?:apple watch|iphone|macbook)\\b.{0,35}\\b(?:off|deal|discount|sale)\\b",
+  "mover": "(?<![a-z0-9])[+-]\\d+(?:\\.\\d+)?%|\\b(?:eps|record high|all-time high)\\b|\\b(?:dips?|weighs?|weigh|pressure|pressures|sell off|sells off|sold off|spike|jitters)\\b|\\b(?:cpi|pce|ppi|yields|hawkish|dovish|retreats?|rebounds?|climbs?|higher|lower|mixed|flat)\\b|\\b(?:earnings|guidance|profit|revenue|growth|demand|orders|export|tariff|antitrust|probe|ban|risk|yield|inflation|jobs|rates?|rises?|rall(?:y|ies)|gains?|jumps?|soars?|falls?|drops?|slides?|sell-?off|slip(?:s)?|sink(?:s)?|surge(?:s)?|climb(?:s)?|cut(?:s)?|hike(?:s)?|upgrade|downgrade|investment|spending|beats?|miss(?:es)?|outlook|forecast|warn(?:s|ing)?)\\b",
+  "preview": "\\bearnings test\\b|\\b(?:earnings preview|expected to post|expected to report|ahead of .*earnings|earnings on tap|earnings due|earnings test|will report|set to report|await.*(?:fed|earnings|cpi|pce)|fed decision looms|fed decision looming)\\b",
+  "speculation": "^(?:will|can|could|should|is|are|what if)\\b.*\\?|\\b(?:might|may|could|would|unlikely to|expected to|set to)\\b",
+  "actual_policy": "\\b(?:fed|federal reserve|fomc)\\b.{0,35}\\b(?:cuts?|raises?|hikes?|holds?|leaves?|keeps?)\\b.{0,25}\\b(?:rates?|policy)\\b",
+  "rules": [
+    {
+      "id": "rate-cut-reversal",
+      "factor": "Rates",
+      "weight": -2,
+      "reason": "Reduced rate-cut expectations can pressure growth-stock valuations",
+      "pattern": "\\brate cut(?:s)? (?:bets|odds|hopes|expectations|chances) (?:fade|fall|drop|recede|diminish|slip|waver|cool)(?:s)?\\b"
+    },
+    {
+      "id": "rate-hike-relief",
+      "factor": "Rates",
+      "weight": 2,
+      "reason": "Reduced rate-hike expectations relieve valuation pressure",
+      "pattern": "\\brate hike(?:s)? (?:bets|odds|fears|expectations|chances) (?:ease|fall|drop|fade|recede)(?:s)?\\b"
+    },
+    {
+      "id": "rate-cut-support",
+      "factor": "Rates",
+      "weight": 2,
+      "reason": "Lower policy rates or stronger cut expectations can support Nasdaq valuations",
+      "pattern": "\\brate cut(?:s)? (?:bets|odds|hopes|expectations|chances) (?:rise|grow|increase|build|strengthen)(?:s)?\\b|\\b(?:fed|federal reserve|fomc)\\b.{0,25}\\b(?:cuts?|lowers?|reduces?)\\b.{0,20}\\b(?:interest |policy )?rates?\\b|\\b(?:fed|fomc)\\b.{0,20}\\bdovish\\b|\\bdovish (?:fed|fomc|pivot)\\b"
+    },
+    {
+      "id": "rate-hike-pressure",
+      "factor": "Rates",
+      "weight": -2,
+      "reason": "Higher policy rates or stronger hike expectations can pressure Nasdaq valuations",
+      "pattern": "\\brate hike(?:s)? (?:bets|odds|fears|expectations|chances) (?:rise|grow|increase|build)(?:s)?\\b|\\b(?:fed|federal reserve|fomc)\\b.{0,25}\\b(?:raises?|hikes?|increases?)\\b.{0,20}\\b(?:interest |policy )?rates?\\b|\\b(?:fed|fomc)\\b.{0,20}\\bhawkish\\b|\\bhawkish (?:fed|fomc|outlook|pivot)\\b"
+    },
+    {
+      "id": "yield-relief",
+      "factor": "Rates",
+      "weight": 2,
+      "reason": "Falling U.S. yields can relieve discount-rate pressure on growth stocks",
+      "pattern": "\\b(?:treasury |u\\.s\\. |us |bond |10-year |10 year )?yields? (?:fall|drop|slide|ease|retreat|decline|sink|slip)(?:s)?\\b|\\b(?:lower|falling|declining) (?:treasury |u\\.s\\. |us |bond )?yields?\\b"
+    },
+    {
+      "id": "yield-pressure",
+      "factor": "Rates",
+      "weight": -2,
+      "reason": "Rising U.S. yields can pressure long-duration Nasdaq valuations",
+      "pattern": "\\b(?:treasury |u\\.s\\. |us |bond |10-year |10 year )?yields? (?:rise|climb|surge|jump|spike|increase)(?:s)?\\b|\\b(?:higher|rising|surging) (?:treasury |u\\.s\\. |us |bond )?yields?\\b"
+    },
+    {
+      "id": "inflation-relief",
+      "factor": "Inflation",
+      "weight": 2,
+      "reason": "Cooler U.S. inflation may reduce restrictive-rate expectations",
+      "pattern": "\\b(?:u\\.s\\. |us |core )?(?:inflation|cpi|pce|ppi)\\b.{0,25}\\b(?:cools?|eases?|slows?|below (?:forecast|expectations|estimates)|softer than expected|lower than expected)\\b|\\b(?:cooler|softer|lower)(?:-| )than(?:-| )expected (?:u\\.s\\. |us |core )?(?:inflation|cpi|pce|ppi)\\b"
+    },
+    {
+      "id": "inflation-pressure",
+      "factor": "Inflation",
+      "weight": -2,
+      "reason": "Hotter U.S. inflation may increase restrictive-rate expectations",
+      "pattern": "\\b(?:u\\.s\\. |us |core )?(?:inflation|cpi|pce|ppi)\\b.{0,25}\\b(?:accelerates?|heats up|hotter|above (?:forecast|expectations|estimates)|higher than expected)\\b|\\b(?:hotter|higher)(?:-| )than(?:-| )expected (?:u\\.s\\. |us |core )?(?:inflation|cpi|pce|ppi)\\b"
+    },
+    {
+      "id": "target-rise",
+      "factor": "Price action",
+      "weight": 3,
+      "reason": "Nasdaq, technology shares or a Nasdaq-sensitive company are explicitly rising",
+      "pattern": "{target}(?: futures| shares| stock| stocks)?(?: (?:is|are|edges?|edged|opens?|opened|turns?|turned|trade|trades|trading|extends?))? (?:higher|up|rise|rises|rising|rallies|rally|rallied|gains|gain|gained|jumps|jump|jumped|soars|soar|soared|rebounds|rebound|rebounded|surges|surge|climbs|climb|advances|advance|recovers|recover)\\b",
+      "observed": true
+    },
+    {
+      "id": "target-fall",
+      "factor": "Price action",
+      "weight": -3,
+      "reason": "Nasdaq, technology shares or a Nasdaq-sensitive company are explicitly falling",
+      "pattern": "{target}(?: futures| shares| stock| stocks)?(?: (?:is|are|edges?|edged|opens?|opened|turns?|turned|trade|trades|trading|extends?))? (?:lower|down|fall|falls|falling|fell|drops|drop|dropped|slides|slide|slips|slip|sinks|sink|slumps|slump|tumbles|tumble|retreats|retreat|plunges|plunge|craters|crater|declines|decline|loses|lose|dips|dip|sell off|sells off|sold off)\\b",
+      "observed": true
+    },
+    {
+      "id": "tech-selloff",
+      "factor": "Price action",
+      "weight": -3,
+      "reason": "Technology/semiconductor selling is explicit",
+      "pattern": "\\b(?:tech|technology|semiconductor|semiconductors|chip|chips|memory|ai|nasdaq)(?: stocks| shares)? (?:sell-?off|rout|slump|slide)\\b|\\b(?:sell-?off|rout|slump|slide) in (?:tech|technology|semiconductor|chip|nasdaq)\\b",
+      "observed": true
+    },
+    {
+      "id": "tech-rally",
+      "factor": "Price action",
+      "weight": 3,
+      "reason": "Technology/semiconductor buying is explicit",
+      "pattern": "\\b(?:tech|technology|semiconductor|chip|chips|ai|nasdaq)(?: stocks| shares)? (?:rally|rebound|recovery)\\b",
+      "observed": true
+    },
+    {
+      "id": "broad-rise",
+      "factor": "Broad market",
+      "weight": 1,
+      "reason": "Broader U.S. equity strength offers indirect Nasdaq context",
+      "pattern": "{broad}(?: futures| shares| stocks)?(?: (?:is|are|edges?|opens?|turns?))? (?:higher|up|rises?|rallies|rally|gains?|jumps?|rebounds?|climbs?)\\b",
+      "observed": true
+    },
+    {
+      "id": "broad-fall",
+      "factor": "Broad market",
+      "weight": -1,
+      "reason": "Broader U.S. equity weakness offers indirect Nasdaq context",
+      "pattern": "{broad}(?: futures| shares| stocks)?(?: (?:is|are|edges?|opens?|turns?))? (?:mostly )?(?:lower|down|falls?|drops?|slides?|slips?|sinks?|slumps?|tumbles?|retreats?|dips?)\\b",
+      "observed": true
+    },
+    {
+      "id": "guidance-up",
+      "factor": "Guidance",
+      "weight": 3,
+      "reason": "A Nasdaq-sensitive company raises guidance or its forward outlook",
+      "pattern": "\\b(?:raises?|raised|lifts?|lifted|upgrades?) (?:its |the )?(?:guidance|outlook|forecast|revenue forecast|profit forecast|sales forecast)\\b|\\b(?:guidance|outlook)\\b.{0,16}\\b(?:above expectations|raised|upgraded)\\b",
+      "company": true
+    },
+    {
+      "id": "guidance-down",
+      "factor": "Guidance",
+      "weight": -3,
+      "reason": "A Nasdaq-sensitive company cuts guidance or its forward outlook",
+      "pattern": "\\b(?:cuts?|cut|lowers?|lowered|reduces?|reduced|slashes?|slashed) (?:its |the )?(?:guidance|outlook|forecast|revenue forecast|profit forecast|sales forecast)\\b|\\b(?:guidance|outlook)\\b.{0,16}\\b(?:below expectations|weak|lowered|disappoints?|misses?)\\b",
+      "company": true
+    },
+    {
+      "id": "earnings-beat",
+      "factor": "Earnings",
+      "weight": 2,
+      "reason": "A Nasdaq-sensitive company reports earnings/revenue above expectations",
+      "pattern": "\\b(?:earnings|eps|revenue|profit|sales|results)(?: (?:and|or) (?:earnings|eps|revenue|profit|sales))? (?:beats?|beat|top(?:s)?|above) (?:estimates|expectations|forecast|consensus)\\b|\\b(?:beats?|beat|tops?) (?:earnings |revenue |profit |sales )?(?:estimates|expectations|forecast|consensus)\\b|\\b(?:earnings|revenue|profit) beat\\b",
+      "company": true
+    },
+    {
+      "id": "earnings-miss",
+      "factor": "Earnings",
+      "weight": -2,
+      "reason": "A Nasdaq-sensitive company reports earnings/revenue below expectations",
+      "pattern": "\\b(?:earnings|eps|revenue|profit|sales|results) (?:miss(?:es)?|below) (?:estimates|expectations|forecast|consensus)\\b|\\bmiss(?:es)? (?:earnings |revenue |profit |sales )?(?:estimates|expectations|forecast|consensus)\\b|\\b(?:earnings|revenue|profit) miss\\b",
+      "company": true
+    },
+    {
+      "id": "ai-demand",
+      "factor": "AI/Semis",
+      "weight": 2,
+      "reason": "Stronger AI/data-centre or semiconductor demand supports relevant constituents",
+      "pattern": "\\b(?:ai|chip|semiconductor|data cent(?:er|re)) (?:demand|orders|spending) (?:surges?|grows?|rises?|accelerates?|strengthens?)\\b|\\b(?:strong|surging|record|robust) (?:ai|chip|semiconductor|data cent(?:er|re)) (?:demand|orders)\\b|\\b(?:ai|chip) boom\\b"
+    },
+    {
+      "id": "ai-demand-weak",
+      "factor": "AI/Semis",
+      "weight": -2,
+      "reason": "Weaker AI/data-centre or semiconductor demand pressures relevant constituents",
+      "pattern": "\\b(?:ai|chip|semiconductor|data cent(?:er|re)) (?:demand|orders|spending) (?:falls?|drops?|slows?|weakens?|cools?)\\b|\\b(?:weak|slowing|falling) (?:ai|chip|semiconductor|data cent(?:er|re)) (?:demand|orders)\\b|\\bai trade cools\\b"
+    },
+    {
+      "id": "policy-pressure",
+      "factor": "Policy",
+      "weight": -2,
+      "reason": "New technology trade or regulatory restrictions pose an estimated earnings risk",
+      "pattern": "\\b(?:imposes?|tightens?|expands?|announces?|adds?|introduces?)\\b.{0,24}\\b(?:chip export (?:ban|controls|restrictions)|tech tariffs?|semiconductor restrictions|export controls)\\b|\\b(?:chip export ban|new chip restrictions|antitrust (?:lawsuit|charges|case)|regulatory crackdown)\\b"
+    },
+    {
+      "id": "policy-relief",
+      "factor": "Policy",
+      "weight": 2,
+      "reason": "Technology trade or regulatory restrictions are explicitly eased",
+      "pattern": "\\b(?:lifts?|eases?|removes?|relaxes?|rolls back|scraps?)\\b.{0,24}\\b(?:chip export (?:ban|controls|restrictions)|tech tariffs?|semiconductor restrictions|export controls|ban)\\b"
+    },
+    {
+      "id": "risk-pressure",
+      "factor": "Risk",
+      "weight": -2,
+      "reason": "Explicit recession or risk-aversion language can pressure Nasdaq risk appetite",
+      "pattern": "\\b(?:recession|credit crisis|financial crisis|ai bubble) (?:risks?|fears?|concerns?) (?:grow|rise|increase|mount|deepen)(?:s)?\\b|\\b(?:risk-off|risk aversion|risk-averse|tech valuation concerns|ai concerns|ai jitters)\\b"
+    },
+    {
+      "id": "risk-relief",
+      "factor": "Risk",
+      "weight": 2,
+      "reason": "Explicit easing of recession risk or risk appetite supports Nasdaq context",
+      "pattern": "\\b(?:recession|ai bubble) (?:risks?|fears?|concerns?) (?:ease|fall|recede|fade)(?:s)?\\b|\\b(?:risk-on|soft landing|growth optimism)\\b"
+    },
+    {
+      "id": "volatility-pressure",
+      "factor": "Volatility",
+      "weight": -2,
+      "reason": "Higher U.S. equity volatility suggests more risk aversion",
+      "pattern": "\\b(?:vxn|vix|nasdaq volatility|fear gauge) (?:rises?|surges?|jumps?|spikes?|climbs?)\\b"
+    },
+    {
+      "id": "volatility-relief",
+      "factor": "Volatility",
+      "weight": 2,
+      "reason": "Lower U.S. equity volatility suggests less risk aversion",
+      "pattern": "\\b(?:vxn|vix|nasdaq volatility|fear gauge) (?:falls?|drops?|slides?|eases?|retreats?)\\b"
+    },
+    {
+      "id": "shares-rise",
+      "factor": "Price action",
+      "weight": 3,
+      "reason": "Reported shares of a Nasdaq-sensitive company rise after the announcement",
+      "pattern": "^(?:its |the )?(?:shares|stock) (?:rises?|rallies|rally|gains?|jumps?|soars?|climbs?|surges?|rebounds?|are higher|is higher)\\b",
+      "observed": true,
+      "company": true
+    },
+    {
+      "id": "shares-fall",
+      "factor": "Price action",
+      "weight": -3,
+      "reason": "Reported shares of a Nasdaq-sensitive company fall after the announcement",
+      "pattern": "^(?:its |the )?(?:shares|stock) (?:falls?|drops?|slides?|slips?|sinks?|slumps?|tumbles?|retreats?|are lower|is lower)\\b",
+      "observed": true,
+      "company": true
+    },
+    {
+      "id": "tech-weighs",
+      "factor": "Price action",
+      "weight": -3,
+      "reason": "Technology/semiconductor weakness is explicitly pressuring Nasdaq",
+      "pattern": "\\b(?:memory|chip|tech|technology|semiconductor|ai) stocks (?:weigh(?:s)? on|pressure|drag on) (?:nasdaq|technology|tech)\\b",
+      "observed": true
+    },
+    {
+      "id": "yield-risk-warning",
+      "factor": "Rates",
+      "weight": -1,
+      "reason": "A reported warning highlights upward bond-yield risk; no actual yield increase is established",
+      "pattern": "\\b(?:bond|treasury) yields face (?:a )?(?:disorderly |sharp )?spike\\b"
+    },
+    {
+      "id": "positive-percent",
+      "factor": "Price action",
+      "weight": 3,
+      "reason": "An explicit positive price change is reported for Nasdaq or a Nasdaq-sensitive company",
+      "pattern": "{target}(?: futures| shares| stock)? \\+\\d+(?:\\.\\d+)?%",
+      "observed": true
+    },
+    {
+      "id": "negative-percent",
+      "factor": "Price action",
+      "weight": -3,
+      "reason": "An explicit negative price change is reported for Nasdaq or a Nasdaq-sensitive company",
+      "pattern": "{target}(?: futures| shares| stock)? -\\d+(?:\\.\\d+)?%",
+      "observed": true
+    },
+    {
+      "id": "record-high",
+      "factor": "Price action",
+      "weight": 3,
+      "reason": "A reported Nasdaq/technology record high establishes positive price action",
+      "pattern": "{target} (?:hits?|sets?|closes? at|closed at) (?:a |another |new )?(?:record high|all-time high)\\b",
+      "observed": true
+    }
+  ]
+}

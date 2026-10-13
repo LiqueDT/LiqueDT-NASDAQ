@@ -10,17 +10,17 @@
   <meta name="description" content="LiqueDT is a live NASDAQ market context companion for sessions, related markets, economic events and news.">
   <title>LiqueDT &mdash; NASDAQ market context</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="favicon-32.png?v=1.0.39" type="image/png" sizes="32x32">
-  <link rel="shortcut icon" href="favicon.ico?v=1.0.39" type="image/x-icon">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1.0.39">
-  <link rel="stylesheet" href="styles.css?v=1.0.39">
+  <link rel="icon" href="favicon-32.png?v=1.0.44" type="image/png" sizes="32x32">
+  <link rel="shortcut icon" href="favicon.ico?v=1.0.44" type="image/x-icon">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1.0.44">
+  <link rel="stylesheet" href="styles.css?v=1.0.44">
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to market overview</a>
 
   <header class="app-header">
     <a class="brand" href="#overview" aria-label="LiqueDT home">
-      <img src="icon.svg?v=1.0.39" alt="" width="40" height="40">
+      <img src="icon.svg?v=1.0.44" alt="" width="40" height="40">
       <span><strong>LiqueDT<span>.</span></strong><small>NASDAQ CONTEXT</small></span>
     </a>
 
@@ -59,10 +59,11 @@
     <div class="health-item"><span>Calendar</span><strong id="calendarHealth" class="checking">Checking</strong></div>
     <div class="health-item"><span>News</span><strong id="newsHealth" class="checking">Checking</strong></div>
     <div class="health-item last-check"><span>Last checked</span><strong id="lastChecked">&mdash;</strong></div>
-    <button id="refreshData" class="quiet-button" type="button" aria-label="Refresh deployed snapshot data">
+    <button id="refreshData" class="quiet-button" type="button" aria-label="Check for data updates" hidden>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5M4 13a8.1 8.1 0 0 0 15.5 2m.5 5v-5h-5"/></svg>
-      <span>Refresh snapshot</span>
+      <span>Check updates</span>
     </button>
+    <p id="refreshFeedback" class="refresh-feedback" role="status" hidden></p>
   </section>
 
   <nav class="mobile-nav primary-nav" aria-label="Mobile navigation">
@@ -78,7 +79,7 @@
       <div class="hero-copy">
         <p class="eyebrow"><span class="live-pip"></span> NASDAQ COMPANION</p>
         <h1>Market overview</h1>
-        <p class="hero-lede">Sessions, related markets, economic events and headlines&mdash;aligned to Singapore time.</p>
+        <p class="hero-lede">Sessions, related markets, economic events and headlines.</p>
         <div class="overview-tags"><span>NO EXECUTION</span><span>CONTEXT ONLY</span><span>SGT</span></div>
       </div>
 
@@ -129,7 +130,7 @@
     <section class="session-section" aria-labelledby="sessionsTitle">
       <div class="section-heading compact">
         <div><p class="eyebrow">MARKET WINDOWS &middot; SGT</p><h2 id="sessionsTitle">Where liquidity is awake</h2></div>
-        <p>Main sessions show the trading context windows. Status windows stay separate for low-liquidity, pause and early-reopen conditions.</p>
+        <p id="sessionScheduleNote">London and New York follow their own daylight-saving changes. Overnight status uses the NQ futures reference; spot-CFD hours vary by broker.</p>
       </div>
       <div id="holidayNotice" class="holiday-notice hidden" aria-live="polite">
         <span class="holiday-notice-dot"></span>
@@ -143,12 +144,12 @@
         </article>
         <article class="session-card" data-session="europe-pre-market">
           <div class="session-number">02</div>
-          <div><span class="session-status">CHECKING</span><h3>Europe pre-market</h3><p class="session-local-time">15:00-21:30 SGT | Bias starts forming before U.S. cash open</p></div>
+          <div><span class="session-status">CHECKING</span><h3>London / pre-US cash</h3><p class="session-local-time">Checking London lead-in to U.S. cash open</p></div>
           <div class="session-timer"><strong>--:--:--</strong><small>Next change</small></div>
         </article>
         <article class="session-card" data-session="us-cash-session">
           <div class="session-number">03</div>
-          <div><span class="session-status">CHECKING</span><h3>U.S. cash session</h3><p class="session-local-time">21:30-04:00 SGT | Main NASDAQ liquidity</p></div>
+          <div><span class="session-status">CHECKING</span><h3>New York / cash</h3><p class="session-local-time">Checking Nasdaq cash hours | Main NASDAQ liquidity</p></div>
           <div class="session-timer"><strong>--:--:--</strong><small>Next change</small></div>
         </article>
       </div>
@@ -156,17 +157,17 @@
       <div id="statusWindowGrid" class="session-grid status-window-grid">
         <article class="session-card status-card" data-session="after-hours">
           <div class="session-number">04</div>
-          <div><span class="session-status">CHECKING</span><h3>After-hours</h3><p class="session-local-time">04:00-04:49 SGT | Low liquidity</p></div>
+          <div><span class="session-status">CHECKING</span><h3>After-hours</h3><p class="session-local-time">Checking reference hours | Low liquidity</p></div>
           <div class="session-timer"><strong>--:--:--</strong><small>Next change</small></div>
         </article>
         <article class="session-card status-card" data-session="daily-pause">
           <div class="session-number">05</div>
-          <div><span class="session-status">CHECKING</span><h3>Daily pause</h3><p class="session-local-time">04:49-06:05 SGT | Market paused</p></div>
+          <div><span class="session-status">CHECKING</span><h3>Daily pause</h3><p class="session-local-time">Checking reference hours | Market paused</p></div>
           <div class="session-timer"><strong>--:--:--</strong><small>Next change</small></div>
         </article>
         <article class="session-card status-card" data-session="early-cfd-reopen">
           <div class="session-number">06</div>
-          <div><span class="session-status">CHECKING</span><h3>Early CFD reopen</h3><p class="session-local-time">06:05-08:00 SGT | Observe</p></div>
+          <div><span class="session-status">CHECKING</span><h3>Early CFD reopen</h3><p class="session-local-time">Checking reference hours | Observe</p></div>
           <div class="session-timer"><strong>--:--:--</strong><small>Next change</small></div>
         </article>
       </div>
@@ -239,7 +240,7 @@
           <article class="driver-card" data-driver="DXY">
             <div><span class="driver-icon">$</span><span class="relationship">Conditional FX lens</span></div>
             <h3>U.S. dollar</h3>
-            <p>A stronger dollar can tighten global financial conditions and reduce translated overseas revenue; its live correlation is allowed to mute or flip.</p>
+            <p>DXY is included in the Nasdaq summary with a 5% base weight. A stronger dollar can affect financial conditions and overseas revenue. Its measured correlation sets the direction; a weak relationship is muted and a small effect is balanced.</p>
             <button type="button" data-open-symbol="TVC:DXY">Open DXY chart <span>&#8599;</span></button>
           </article>
         </aside>
@@ -250,16 +251,22 @@
     <section id="companies" class="companies-section section-anchor" aria-labelledby="companiesTitle">
       <div class="section-heading">
         <div><p class="eyebrow">NASDAQ-100 CONSTITUENTS</p><h2 id="companiesTitle">Current companies inside Nasdaq-100</h2></div>
-        <p>Official Nasdaq constituent list with live last sale, daily change and market cap when the source provides it.</p>
+        <p>Explore the official constituent list by company size or daily movement. Market cap is a size lens, not an official index weight.</p>
       </div>
       <article class="companies-panel">
         <div class="companies-toolbar">
           <div><span id="companiesCount">Checking...</span><small id="companiesFreshnessNote">Loading official Nasdaq list</small></div>
           <div class="companies-actions">
-            <input id="companySearch" type="search" placeholder="Search symbol or company" aria-label="Search Nasdaq-100 companies">
             <span id="companiesStatus" class="source-status waiting">CONNECTING</span>
           </div>
         </div>
+        <div class="companies-controls">
+          <input id="companySearch" type="search" placeholder="Search symbol or company" aria-label="Search Nasdaq-100 companies">
+          <label>Rank by<select id="companySort"><option value="size">Market cap</option><option value="gainers">Gainers</option><option value="losers">Losers</option><option value="movers">Movers</option><option value="name">A&ndash;Z</option></select></label>
+          <label>View<select id="companyView"><option value="companies">Companies</option><option value="listings">Listings</option></select></label>
+        </div>
+        <div id="companiesSummary" class="companies-summary" aria-live="polite"></div>
+        <p id="companiesRankNote" class="companies-rank-note">Size ranking uses source market caps, not Nasdaq index weights.</p>
         <div id="companiesList" class="companies-list" aria-live="polite">
           <div class="loading-row"><span></span><p>Loading Nasdaq-100 constituents...</p></div>
         </div>
@@ -286,7 +293,7 @@
         <div id="holidayList" class="holiday-list" aria-live="polite">
           <div class="loading-row"><span></span><p>Building exchange holiday calendar&hellip;</p></div>
         </div>
-        <div class="panel-footer"><span>Nasdaq cash-market closures and early closes; CFD hours may differ by broker</span><a href="https://www.nasdaqtrader.com/Trader.aspx?id=Calendar" target="_blank" rel="noreferrer">Nasdaq Trader calendar &nearr;</a></div>
+        <div class="panel-footer"><span>Exchange closures, early closes and US/UK bank holidays. Bank holidays alone do not close NAS100 CFDs. Dates use published recurring rules; broker exceptions need confirmation.</span><span class="footer-links"><a href="https://www.nasdaqtrader.com/Trader.aspx?id=Calendar" target="_blank" rel="noreferrer">Nasdaq calendar &nearr;</a><a href="https://www.frbservices.org/about/holiday-schedules/" target="_blank" rel="noreferrer">US bank holidays &nearr;</a><a href="https://www.gov.uk/bank-holidays" target="_blank" rel="noreferrer">UK bank holidays &nearr;</a></span></div>
       </article>
     </section>
 
@@ -313,7 +320,7 @@
   </main>
 
   <footer>
-    <a class="brand footer-brand" href="#overview"><img src="icon.svg?v=1.0.39" alt="" width="32" height="32"><strong>LiqueDT<span>.</span></strong></a>
+    <a class="brand footer-brand" href="#overview"><img src="icon.svg?v=1.0.44" alt="" width="32" height="32"><strong>LiqueDT<span>.</span></strong></a>
     <p>Liquidity context for NASDAQ</p>
     <p>Market hours are indicative and can vary by broker and holiday.</p>
   </footer>
@@ -323,7 +330,8 @@
       <button class="dialog-close" type="button" data-close-dialog="methodDialog" aria-label="Close">&times;</button>
       <p class="eyebrow">METHODOLOGY</p>
       <h2>A narrative compass, not a forecast.</h2>
-      <p>LiqueDT scans recent NASDAQ-sensitive headlines for language around rates, AI/semiconductors, mega-cap earnings, volatility and risk. It assigns a small estimated directional weight, reason and confidence, then aggregates the result into bearish, balanced or bullish narrative context.</p>
+      <p>LiqueDT filters for Nasdaq-sensitive companies, technology shares and U.S. macro events. It reads the subject, reported action, negation and conflicting clauses. An explicit Nasdaq price reaction takes priority; forward guidance can outweigh a trailing earnings beat. Previews and unresolved conflicts stay mixed.</p>
+      <p>The summary gives more weight to recent, relevant headlines with clear evidence. Repeated reports count once, and stories older than 36 hours or without a valid publication time are excluded. Strong/moderate/limited describes the evidence in the headline, not a measured probability of future returns.</p>
       <p>News impact is a headline estimate, not full-article verification. Cross-market effects use rolling correlation when available, but relationships can invert and price may already reflect the story. Always read the underlying source. This feature must never be used as a standalone reason to trade.</p>
       <button class="primary-button" value="close">Understood</button>
     </form>
@@ -349,7 +357,7 @@
   </dialog>
 
   <noscript><div class="noscript">LiqueDT needs JavaScript for live clocks, data and charts.</div></noscript>
-  <script src="app.js?v=1.0.39" defer></script>
+  <script src="app.js?v=1.0.44" defer></script>
 </body>
 </html>
 

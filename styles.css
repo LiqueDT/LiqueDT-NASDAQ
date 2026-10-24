@@ -280,6 +280,11 @@ main, footer { width: min(calc(100% - 48px), var(--max)); margin-inline: auto; }
 .companies-summary .up, .company-meta .company-change.up { color: var(--acid); }
 .companies-summary .down, .company-meta .company-change.down { color: var(--red); }
 .companies-rank-note { margin: 0; padding: 2px 20px 14px; color: var(--muted); font-size: 9px; line-height: 1.6; border-bottom: 1px solid var(--line); }
+.companies-method { border-bottom: 1px solid var(--line); }
+.companies-method summary { width: fit-content; margin: 0 20px; padding: 9px 0; color: var(--muted); font-size: 10px; cursor: pointer; }
+.companies-method summary:focus-visible { outline: 2px solid var(--acid); outline-offset: 3px; border-radius: 3px; }
+.companies-method .companies-rank-note { border: 0; }
+.companies-method:not([open]) .companies-rank-note { display: none; }
 .companies-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); max-height: 680px; overflow: auto; }
 .company-card { min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 10px; padding: 13px; background: var(--ink-2); }
 .company-rank { color: #596675; font: 500 8px/1 var(--mono); }
@@ -500,15 +505,27 @@ dialog p:not(.eyebrow) { color: #aab5c1; font-size: 11px; line-height: 1.75; }
   .market-chart { height: 540px; min-height: 520px; }
   .driver-stack { grid-template-columns: 1fr; }
   .market-layout, .chart-card, .driver-stack, .driver-card, .companies-section, .companies-panel, .intel-grid, .intel-panel, .calendar-section, .news-section { width: 100%; min-width: 0; max-width: 100%; }
-  .companies-toolbar { align-items: flex-start; flex-direction: column; }
-  .companies-actions { width: 100%; display: grid; grid-template-columns: 1fr; align-items: stretch; gap: 9px; }
+  .companies-section .section-heading { gap: 10px; margin-bottom: 18px; }
+  .companies-section .section-heading h2 { max-width: 32ch; font-size: 23px; line-height: 1.15; letter-spacing: -.035em; }
+  .companies-section .section-heading > p { font-size: 10px; line-height: 1.55; }
+  .companies-toolbar { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; padding: 12px 14px; gap: 8px 10px; }
+  .companies-toolbar > div:first-child { display: contents; }
+  .companies-toolbar #companiesCount { grid-column: 1; grid-row: 1; font-size: 9px; line-height: 1.4; }
+  .companies-toolbar #companiesFreshnessNote { grid-column: 1 / -1; grid-row: 2; min-width: 0; font-size: 7px; line-height: 1.55; overflow-wrap: anywhere; }
+  .companies-actions { grid-column: 2; grid-row: 1; min-width: 0; width: auto; display: flex; justify-content: flex-end; }
   .companies-actions input { width: 100%; min-width: 0; }
-  .companies-controls { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding: 12px 14px 6px; gap: 10px; }
+  .companies-controls { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding: 10px 14px 4px; gap: 8px 10px; }
   .companies-controls input { grid-column: 1 / -1; }
-  .companies-controls input, .companies-controls select { font-size: 16px; min-height: 42px; padding: 8px; }
-  .companies-summary { padding: 8px 14px; gap: 6px 10px; font-size: 8px; }
+  .companies-controls label { gap: 4px; font: 500 9px/1.3 var(--font); text-transform: none; }
+  .companies-controls input, .companies-controls select { height: 44px; min-height: 44px; padding: 8px 10px; font: 400 16px/1.25 var(--font); letter-spacing: normal; border-radius: 7px; }
+  .companies-controls input::placeholder { font: 400 12px/1.3 var(--font); letter-spacing: normal; color: var(--muted); opacity: 1; }
+  .companies-summary { padding: 7px 14px 2px; gap: 5px 9px; font-size: 8px; }
+  .companies-method summary { min-height: 36px; display: flex; align-items: center; gap: 7px; margin: 0 14px; padding: 8px 0; font-size: 10px; list-style: none; }
+  .companies-method summary::-webkit-details-marker { display: none; }
+  .companies-method summary::before { content: "+"; font: 500 13px/1 var(--font); }
+  .companies-method[open] summary::before { content: "−"; }
   .companies-rank-note { padding: 2px 14px 12px; font-size: 8px; }
-  .companies-actions .source-status { width: max-content; max-width: 100%; justify-self: start; white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.25; }
+  .companies-actions .source-status { width: max-content; max-width: 145px; padding: 5px 7px; font-size: 6.5px; white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.3; }
   .companies-list { grid-template-columns: 1fr; max-height: 224px; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
   .company-card { padding: 8px 10px; gap: 5px 7px; }
   .company-main strong { font-size: 11px; }

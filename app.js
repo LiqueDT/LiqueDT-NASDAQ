@@ -13,9 +13,9 @@ const LONDON_TZ = "Europe/London";
 const CFD_SCHEDULE = { closeHour: 17, closeMinute: 0, reopenHour: 18, reopenMinute: 0 };
 
 const mainSessions = [
-  { id: "asia-overnight", label: "Asia / overnight", note: "Range building, slower movement", tone: "range", kind: "main" },
-  { id: "europe-pre-market", label: "London / pre-US cash", note: "London lead-in to U.S. cash open", tone: "bias", kind: "main" },
-  { id: "us-cash-session", label: "New York / cash", note: "Main NASDAQ liquidity", tone: "main", kind: "main" }
+  { id: "asia-overnight", label: "Asia", note: "Regional overnight context, not an exchange session", tone: "range", kind: "main", zone: SESSION_TZ },
+  { id: "europe-pre-market", label: "London", note: "London cash-market reference", tone: "bias", kind: "main", zone: LONDON_TZ },
+  { id: "us-cash-session", label: "New York", note: "Nasdaq regular session / main liquidity", tone: "main", kind: "main", zone: MARKET_TZ }
 ];
 
 const statusWindows = [
@@ -459,7 +459,59 @@ function addMinutes(date, minutes) {
 }
 
 function formatTimeRange(start, end) {
-  return `${sgtHourMinute(start)}-${sgtHourMinute(end)}`;
+  const crossesMidnight = !sameYmd(zonedParts(start, SESSION_TZ), zonedParts(end, SESSION_TZ));
+  return `${sgtHourMinute(start)}–${sgtHourMinute(end)}${crossesMidnight ? " (+1 day)" : ""}`;
+}
+
+function zoneOffsetMinutes(date, zone) {
+  const parts = zonedParts(date, zone);
+  return Math.round((Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second) - Math.floor(+date / 1000) * 1000) / 60000);
+}
+
+function zoneClockLabel(zone, now) {
+  const offset = zoneOffsetMinutes(now, zone);
+  return zone === SESSION_TZ ? "SGT · UTC+8" : zone === LONDON_TZ ? (offset === 60 ? "BST · UTC+1" : "GMT · UTC+0") : (offset === -240 ? "EDT · UTC−4" : "EST · UTC−5");
+}
+
+function clockSeason(zone, now = new Date()) {
+  const offset = zoneOffsetMinutes(now, zone);
+  if (zone === SESSION_TZ) return { short: "SGT · UTC+8", detail: "Singapore time year-round. No daylight-saving clock changes.", next: null };
+  const isLondon = zone === LONDON_TZ;
+  const daylight = offset === (isLondon ? 60 : -240);
+  const short = zoneClockLabel(zone, now);
+  let previous = now;
+  let next = null;
+  // Read the installed time-zone database, not a shared 'summer' flag or hard-coded SGT dates.
+  for (let day = 1; day <= 370; day++) {
+    const candidate = new Date(+now + day * 86400000);
+    if (zoneOffsetMinutes(candidate, zone) !== offset) {
+      let low = Math.floor(+previous / 1000) * 1000, high = Math.ceil(+candidate / 1000) * 1000;
+      while (high - low > 1000) {
+        const mid = Math.floor((low + high) / 2000) * 1000;
+        if (zoneOffsetMinutes(new Date(mid), zone) === offset) low = mid; else high = mid;
+      }
+      next = new Date(Math.ceil(high / 1000) * 1000);
+      break;
+    }
+    previous = candidate;
+  }
+  const nextLabel = next ? `${formatter(SESSION_TZ, { day: "2-digit", month: "short", year: "numeric" }).format(next)} at ${sgtHourMinute(next)} SGT` : "not available";
+  return { short, next, daylight, detail: `${isLondon ? (daylight ? "British Summer Time" : "Greenwich Mean Time / standard time") : (daylight ? "U.S. daylight-saving time" : "U.S. Eastern Standard Time")}. Next clock change: ${nextLabel}.` };
+}
+
+let seasonsCache = { key: "", value: null };
+function sessionSeasons(now = new Date()) {
+  // Includes offsets so the descriptions switch at the actual Sunday clock-change instant.
+  const key = `${ymd(zonedParts(now, SESSION_TZ))}:${zoneOffsetMinutes(now, LONDON_TZ)}:${zoneOffsetMinutes(now, MARKET_TZ)}`;
+  if (seasonsCache.key !== key) seasonsCache = { key, value: new Map([SESSION_TZ, LONDON_TZ, MARKET_TZ].map(zone => [zone, clockSeason(zone, now)])) };
+  return seasonsCache.value;
+}
+
+function londonSchedule(parts) {
+  const holiday = bankHolidaysForYear(parts.year).find(event => event.region === "UK" && sameYmd(parts, event.parts));
+  const earlyClose = !holiday && parts.month === 12 && [24, 31].includes(parts.day);
+  const local = (hour, minute) => zonedDateTimeToUtc(parts.year, parts.month, parts.day, hour, minute, LONDON_TZ);
+  return { start: local(8, 0), end: local(earlyClose ? 12 : 16, 30), holiday: holiday?.name || null, earlyClose };
 }
 
 function sessionById(id) {
@@ -481,7 +533,8 @@ function buildWindows(now) {
     if (!isCfdScheduleDate(tradingDate)) continue;
     const cashHoliday = isNasdaqHoliday(tradingDate);
     const asiaStart = sgtDateTime(tradingDate, 8, 0);
-    const europeStart = zonedDateTimeToUtc(tradingDate.year, tradingDate.month, tradingDate.day, 8, 0, LONDON_TZ);
+    const asiaEnd = sgtDateTime(tradingDate, 17, 0);
+    const london = londonSchedule(tradingDate);
     const londonHoliday = isLondonBankHoliday(tradingDate);
     const cashOpen = nyDateTime(tradingDate, 9, 30);
     const earlyClose = nasdaqMarketHolidaysForYear(tradingDate.year).find(event => event.type === "early" && sameYmd(event.parts, tradingDate));
@@ -492,10 +545,10 @@ function buildWindows(now) {
     const previousDate = calendarDate(tradingDate, -1);
     const reopen = nyDateTime(previousDate, CFD_SCHEDULE.reopenHour, CFD_SCHEDULE.reopenMinute);
     windows.push(attachWindowMeta("early-cfd-reopen", reopen, asiaStart, holidayMeta));
-    windows.push(attachWindowMeta("asia-overnight", asiaStart, europeStart, holidayMeta));
-    windows.push(attachWindowMeta("europe-pre-market", europeStart, cashOpen, { ...holidayMeta, londonHoliday }));
+    windows.push(attachWindowMeta("asia-overnight", asiaStart, asiaEnd, holidayMeta));
+    windows.push(attachWindowMeta("europe-pre-market", london.start, london.end, { ...holidayMeta, londonHoliday, unavailable: Boolean(london.holiday), closureReason: london.holiday, earlyClose: london.earlyClose }));
     if (!cashHoliday) windows.push(attachWindowMeta("us-cash-session", cashOpen, cashClose, holidayMeta));
-    else windows.push(attachWindowMeta("us-cash-session", cashOpen, cashClose, { ...holidayMeta, unavailable: true }));
+    else windows.push(attachWindowMeta("us-cash-session", cashOpen, cashClose, { ...holidayMeta, unavailable: true, closureReason: nasdaqMarketHolidaysForYear(tradingDate.year).find(event => event.type === "closed" && sameYmd(event.parts, tradingDate))?.name || "Nasdaq holiday" }));
     windows.push(attachWindowMeta("after-hours", cashClose, afterClose, holidayMeta));
     // Friday ends the trading week; there is no Saturday CFD reopen.
     if (tradingDate.weekday !== 5) {
@@ -508,21 +561,27 @@ function buildWindows(now) {
 }
 
 function activeWindow(now) {
-  return buildWindows(now).find(window => now >= window.start && now < window.end) || null;
+  // Header priority is separate from card states: every overlapping card stays independently open.
+  const priority = ["daily-pause", "us-cash-session", "europe-pre-market", "asia-overnight", "after-hours", "early-cfd-reopen"];
+  const active = buildWindows(now).filter(window => now >= window.start && now < window.end);
+  const primary = active.find(window => window.id === "daily-pause") || active.find(window => window.id === "us-cash-session");
+  if (primary) return primary;
+  return priority.map(id => active.find(window => window.id === id && !window.unavailable)).find(Boolean)
+    || active.find(window => window.id === "us-cash-session") || active[0] || null;
 }
 
 function nextWindowAfter(now, predicate = () => true) {
   return buildWindows(now).find(window => window.start > now && predicate(window)) || null;
 }
 
-function nextWindowAfterEnd(window) {
-  return buildWindows(window.end).find(candidate => candidate.start >= window.end && candidate.id !== window.id) || nextWindowAfter(new Date(window.end.getTime() - 1000));
-}
-
 function sessionState(now, config) {
-  const active = activeWindow(now);
-  if (active && active.id === config.id) {
-    const next = nextWindowAfterEnd(active);
+  const ownWindows = buildWindows(now).filter(window => window.id === config.id);
+  const active = ownWindows.find(window => now >= window.start && now < window.end);
+  const upcoming = ownWindows.find(window => window.start > now && !window.unavailable);
+  const localDate = calendarDate(zonedParts(now, config.zone || MARKET_TZ));
+  const holiday = ownWindows.find(window => sameYmd(window.tradingDate, localDate) && window.unavailable);
+  const overlaps = active && !active.unavailable ? buildWindows(now).filter(window => window.kind === "main" && window.id !== config.id && !window.unavailable && now >= window.start && now < window.end) : [];
+  if (active && !active.unavailable) {
     return {
       active: true,
       open: active.tone !== "avoid" && !active.unavailable,
@@ -531,11 +590,12 @@ function sessionState(now, config) {
       openSg: sgtHourMinute(active.start),
       closeSg: sgtHourMinute(active.end),
       timeLabel: active.timeLabel,
-      statusText: active.unavailable ? "CASH CLOSED" : active.tone === "avoid" ? "PAUSED NOW" : (active.cashHoliday || (active.earlyClose && active.id === "after-hours") ? "HOURS UNCONFIRMED" : active.londonHoliday ? "UK BANK HOLIDAY" : "ACTIVE NOW"),
-      timerLabel: active.unavailable ? "Until normal cash close" : "Ends in"
+      window: active,
+      overlaps,
+      statusText: active.tone === "avoid" ? "PAUSED NOW" : config.kind === "main" ? (overlaps.length ? "OPEN · OVERLAP" : "OPEN NOW") : (active.cashHoliday || (active.earlyClose && active.id === "after-hours") ? "HOURS UNCONFIRMED" : "ACTIVE NOW"),
+      timerLabel: config.kind === "main" ? "Closes in" : "Ends in"
     };
   }
-  const upcoming = nextWindowAfter(now, window => window.id === config.id && !window.unavailable);
   if (upcoming) {
     return {
       active: false,
@@ -545,8 +605,11 @@ function sessionState(now, config) {
       openSg: sgtHourMinute(upcoming.start),
       closeSg: sgtHourMinute(upcoming.end),
       timeLabel: upcoming.timeLabel,
-      statusText: "UPCOMING",
-      timerLabel: "Starts in"
+      window: upcoming,
+      overlaps: [],
+      closureReason: holiday?.closureReason || null,
+      statusText: config.kind === "main" ? (holiday ? "CLOSED · HOLIDAY" : !isWeekday(localDate) ? "CLOSED · WEEKEND" : "CLOSED") : "UPCOMING",
+      timerLabel: config.kind === "main" ? "Opens in" : "Starts in"
     };
   }
   return { active: false, open: false, tone: config.tone, target: now, openSg: "--:--", closeSg: "--:--", timeLabel: config.timeLabel || "--:-----:--", statusText: "CLOSED", timerLabel: "Starts in" };
@@ -573,12 +636,12 @@ function nasdaqMarketState(now) {
   const stop = [pause?.start, weeklyClose?.end].filter(Boolean).sort((a, b) => a - b)[0];
   const reopen = nextWindowAfter(now, window => window.id === "early-cfd-reopen");
   const isPaused = current.tone === "avoid";
-  const cashClosed = current.unavailable;
+  const cashClosed = current.id === "us-cash-session" && current.unavailable;
   const uncertainHolidayHours = current.cashHoliday || (current.earlyClose && current.id === "after-hours");
   return {
     open: !isPaused && !uncertainHolidayHours,
     title: isPaused ? "Reference paused" : cashClosed ? "Nasdaq cash closed" : uncertainHolidayHours ? "CFD hours unconfirmed" : current.id === "us-cash-session" ? "Nasdaq cash open" : "Reference open",
-    detail: current.cashHoliday ? `Cash holiday / ${current.label}` : current.londonHoliday ? "London / UK bank holiday" : current.label,
+    detail: current.cashHoliday ? `Cash holiday / ${current.label}` : isLondonBankHoliday(zonedParts(now, LONDON_TZ)) ? "London / UK bank holiday" : current.label,
     target: isPaused ? reopen?.start || current.end : uncertainHolidayHours ? current.end : stop || current.end,
     label: isPaused ? "Until reference reopen" : uncertainHolidayHours ? "Until next window" : stop && weeklyClose && +stop === +weeklyClose.end ? "Until weekend close" : "Until daily pause"
   };
@@ -594,9 +657,12 @@ function updateClocks() {
   renderHolidayNotice(now);
   const scheduleNote = $("#sessionScheduleNote");
   if (scheduleNote) {
-    const zoneLabel = zone => formatter(zone, { timeZoneName: "short" }).formatToParts(now).find(part => part.type === "timeZoneName")?.value;
-    scheduleNote.textContent = `New York ${zoneLabel(MARKET_TZ)} · London ${zoneLabel(LONDON_TZ)} · All times SGT. Overnight status uses the NQ futures reference; spot-CFD and holiday hours vary by broker.`;
+    scheduleNote.textContent = "Independent windows can overlap. Asia is regional context; London and New York use their own cash-market calendars. Broker CFD hours are separate.";
   }
+  const seasons = sessionSeasons(now);
+  const openSessions = mainSessions.map(config => ({ config, state: sessionState(now, config) })).filter(({ state }) => state.open);
+  const overlapNote = $("#sessionOverlapNote");
+  if (overlapNote) overlapNote.textContent = openSessions.length > 1 ? `${openSessions.map(({ config }) => config.label).join(" + ")} overlap now · Each stays open until its own close.` : openSessions.length ? `${openSessions[0].config.label} window open · The other sessions keep their own schedules.` : "All three session windows are closed. Check the separate overnight reference status below.";
 
   const market = nasdaqMarketState(now);
   $("#marketState").textContent = market.title;
@@ -608,15 +674,24 @@ function updateClocks() {
   sessions.forEach(session => {
     const state = sessionState(now, session);
     const card = $(`[data-session="${session.id}"]`);
-    card.classList.toggle("open", state.active);
+    card.classList.toggle("open", state.active && (session.kind === "status" || state.open));
     card.classList.toggle("avoid", state.active && state.tone === "avoid");
     card.querySelector("h3").textContent = session.label;
     card.querySelector(".session-status").textContent = state.statusText || (state.open ? "OPEN NOW" : "CLOSED");
     card.querySelector(".session-timer strong").textContent = countdown(state.target - now);
     card.querySelector(".session-timer small").textContent = state.timerLabel || (state.open ? "Until close" : "Until open");
-    const currentWindow = activeWindow(now);
-    const holidayNote = state.active && currentWindow?.cashHoliday && state.tone !== "avoid" ? "Nasdaq cash closed / CFD hours unconfirmed" : state.active && currentWindow?.londonHoliday ? "UK bank holiday / reduced London participation" : session.note;
+    const currentWindow = state.window;
+    const holidayNote = state.closureReason ? `${state.closureReason} · next available session` : session.kind === "status" && state.active && currentWindow?.cashHoliday && state.tone !== "avoid" ? "Nasdaq cash closed / CFD hours unconfirmed" : currentWindow?.earlyClose && session.kind === "main" ? `${session.note} · early close` : session.note;
     card.querySelector(".session-local-time")?.replaceChildren(`${state.timeLabel || `${state.openSg}-${state.closeSg}`} SGT | ${holidayNote}`);
+    if (session.kind === "main") {
+      const season = seasons.get(session.zone);
+      card.querySelector(".session-season")?.replaceChildren(`Now: ${season.short}`);
+      card.querySelector(".session-season-description")?.replaceChildren(season.detail);
+      const dateLabel = currentWindow ? formatter(SESSION_TZ, { weekday: "short", day: "2-digit", month: "short" }).format(currentWindow.start) : "";
+      const windowClock = currentWindow ? zoneClockLabel(session.zone, currentWindow.start).split(" · ")[0] : "";
+      const basis = session.id === "asia-overnight" ? "08:00–17:00 SGT · regional context" : session.id === "europe-pre-market" ? `08:00–${currentWindow?.earlyClose ? "12:30" : "16:30"} London (${windowClock}) · cash reference` : `09:30–${currentWindow?.earlyClose ? "13:00" : "16:00"} New York (${windowClock}) · Nasdaq regular`;
+      card.querySelector(".session-basis")?.replaceChildren(`${state.active ? "Session" : "Next"}: ${dateLabel} · ${basis}`);
+    }
   });
 }
 

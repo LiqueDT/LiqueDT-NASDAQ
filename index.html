@@ -10,17 +10,17 @@
   <meta name="description" content="LiqueDT is a live NASDAQ market context companion for sessions, related markets, economic events and news.">
   <title>LiqueDT &mdash; NASDAQ market context</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="favicon-32.png?v=1.0.44" type="image/png" sizes="32x32">
-  <link rel="shortcut icon" href="favicon.ico?v=1.0.44" type="image/x-icon">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1.0.44">
-  <link rel="stylesheet" href="styles.css?v=1.0.44">
+  <link rel="icon" href="favicon-32.png?v=1.0.45" type="image/png" sizes="32x32">
+  <link rel="shortcut icon" href="favicon.ico?v=1.0.45" type="image/x-icon">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1.0.45">
+  <link rel="stylesheet" href="styles.css?v=1.0.45">
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to market overview</a>
 
   <header class="app-header">
     <a class="brand" href="#overview" aria-label="LiqueDT home">
-      <img src="icon.svg?v=1.0.44" alt="" width="40" height="40">
+      <img src="icon.svg?v=1.0.45" alt="" width="40" height="40">
       <span><strong>LiqueDT<span>.</span></strong><small>NASDAQ CONTEXT</small></span>
     </a>
 
@@ -130,30 +130,32 @@
     <section class="session-section" aria-labelledby="sessionsTitle">
       <div class="section-heading compact">
         <div><p class="eyebrow">MARKET WINDOWS &middot; SGT</p><h2 id="sessionsTitle">Where liquidity is awake</h2></div>
-        <p id="sessionScheduleNote">London and New York follow their own daylight-saving changes. Overnight status uses the NQ futures reference; spot-CFD hours vary by broker.</p>
+        <p id="sessionScheduleNote">Independent Asia, London and New York windows. London and New York follow their own daylight-saving changes.</p>
       </div>
       <div id="holidayNotice" class="holiday-notice hidden" aria-live="polite">
         <span class="holiday-notice-dot"></span>
         <div><strong id="holidayNoticeTitle">Checking holidays</strong><small id="holidayNoticeDetail">Nasdaq cash-market holiday status</small></div>
       </div>
+      <p id="sessionOverlapNote" class="session-overlap-note" role="status">Checking independent session windows...</p>
       <div id="sessionGrid" class="session-grid main-session-grid">
         <article class="session-card" data-session="asia-overnight">
           <div class="session-number">01</div>
-          <div><span class="session-status">CHECKING</span><h3>Asia / overnight</h3><p class="session-local-time">08:00-15:00 SGT | Range building, slower movement</p></div>
+          <div class="session-copy"><span class="session-status">CHECKING</span><h3>Asia</h3><p class="session-local-time">08:00–17:00 SGT | Regional overnight context</p><p class="session-basis">Regional context, not a single exchange's trading hours</p><span class="session-season">SGT · UTC+8</span><p class="session-season-description">No daylight-saving changes.</p></div>
           <div class="session-timer"><strong>--:--:--</strong><small>Next change</small></div>
         </article>
         <article class="session-card" data-session="europe-pre-market">
           <div class="session-number">02</div>
-          <div><span class="session-status">CHECKING</span><h3>London / pre-US cash</h3><p class="session-local-time">Checking London lead-in to U.S. cash open</p></div>
+          <div class="session-copy"><span class="session-status">CHECKING</span><h3>London</h3><p class="session-local-time">Checking London cash-market reference</p><p class="session-basis">08:00–16:30 London time</p><span class="session-season">Checking GMT / BST</span><p class="session-season-description">London follows UK clock changes independently of New York.</p></div>
           <div class="session-timer"><strong>--:--:--</strong><small>Next change</small></div>
         </article>
         <article class="session-card" data-session="us-cash-session">
           <div class="session-number">03</div>
-          <div><span class="session-status">CHECKING</span><h3>New York / cash</h3><p class="session-local-time">Checking Nasdaq cash hours | Main NASDAQ liquidity</p></div>
+          <div class="session-copy"><span class="session-status">CHECKING</span><h3>New York</h3><p class="session-local-time">Checking Nasdaq regular hours</p><p class="session-basis">09:30–16:00 New York time</p><span class="session-season">Checking EST / EDT</span><p class="session-season-description">New York follows U.S. clock changes independently of London.</p></div>
           <div class="session-timer"><strong>--:--:--</strong><small>Next change</small></div>
         </article>
       </div>
-      <div class="status-window-heading"><p class="eyebrow">STATUS WINDOWS &middot; SGT</p><span>Not treated as main sessions</span></div>
+      <p class="session-source-note">Asia is an app-defined regional context window, not an Asian exchange schedule. London follows LSE continuous trading; New York follows Nasdaq regular trading. Weekend, exchange-holiday and early-close rules apply independently. Calendar rules verified 25 Oct 2026; exceptional closures and your broker's CFD hours require confirmation. <a href="https://www.londonstockexchange.com/equities-trading/business-days" target="_blank" rel="noreferrer">London calendar &nearr;</a> <a href="https://www.nasdaqtrader.com/Trader.aspx?id=Calendar" target="_blank" rel="noreferrer">Nasdaq calendar &nearr;</a></p>
+      <div class="status-window-heading"><p class="eyebrow">OVERNIGHT REFERENCE &middot; SGT</p><span>NQ reference only · not broker CFD hours</span></div>
       <div id="statusWindowGrid" class="session-grid status-window-grid">
         <article class="session-card status-card" data-session="after-hours">
           <div class="session-number">04</div>
@@ -320,7 +322,7 @@
   </main>
 
   <footer>
-    <a class="brand footer-brand" href="#overview"><img src="icon.svg?v=1.0.44" alt="" width="32" height="32"><strong>LiqueDT<span>.</span></strong></a>
+    <a class="brand footer-brand" href="#overview"><img src="icon.svg?v=1.0.45" alt="" width="32" height="32"><strong>LiqueDT<span>.</span></strong></a>
     <p>Liquidity context for NASDAQ</p>
     <p>Market hours are indicative and can vary by broker and holiday.</p>
   </footer>
@@ -357,7 +359,7 @@
   </dialog>
 
   <noscript><div class="noscript">LiqueDT needs JavaScript for live clocks, data and charts.</div></noscript>
-  <script src="app.js?v=1.0.44" defer></script>
+  <script src="app.js?v=1.0.45" defer></script>
 </body>
 </html>
 
